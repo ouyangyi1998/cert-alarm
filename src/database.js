@@ -1,0 +1,323 @@
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+
+/**
+ * 数据库管理器
+ */
+class Database {
+    constructor() {
+        this.dbPath = path.join(__dirname, '..', 'data', 'cert-alarm.db');
+        this.db = null;
+    }
+
+    /**
+     * 初始化数据库
+     */
+    async initialize() {
+        return new Promise((resolve, reject) => {
+            try {
+                // 确保数据目录存在
+                const fs = require('fs');
+                const dataDir = path.dirname(this.dbPath);
+                if (!fs.existsSync(dataDir)) {
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+
+                this.db = new sqlite3.Database(this.dbPath, (err) => {
+                    if (err) {
+                        console.error('数据库连接失败:', err);
+                        reject(err);
+                    } else {
+                        console.log('成功连接到SQLite数据库');
+                        this.createTables().then(resolve).catch(reject);
+                    }
+                });
+            } catch (error) {
+                console.error('数据库初始化失败:', error);
+                reject(error);
+            }
+        });
+    }
+
+    /**
+     * 创建数据表
+     */
+    async createTables() {
+        return new Promise((resolve, reject) => {
+            const createTablesSQL = `
+                -- 配置表
+                CREATE TABLE IF NOT EXISTS config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+
+                -- 域名表
+                CREATE TABLE IF NOT EXISTS domains (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain TEXT UNIQUE NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- 邮箱表
+                CREATE TABLE IF NOT EXISTS emails (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- 证书检查记录表
+                CREATE TABLE IF NOT EXISTS cert_checks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    issuer TEXT,
+                    subject TEXT,
+                    valid_from TEXT,
+                    valid_to TEXT,
+                    expiry_date TEXT,
+                    days_until_expiry INTEGER,
+                    is_valid BOOLEAN,
+                    is_expiring BOOLEAN,
+                    fingerprint TEXT,
+                    error_message TEXT,
+                    check_time DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- 系统日志表
+                CREATE TABLE IF NOT EXISTS system_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    level TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+            `;
+
+            this.db.exec(createTablesSQL, (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 获取配置
+     */
+    async getConfig(key) {
+        return new Promise((resolve, reject) => {
+            this.db.get('SELECT value FROM config WHERE key = ?', [key], (err, row) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(row ? JSON.parse(row.value) : null);
+                }
+            });
+        });
+    }
+
+    /**
+     * 设置配置
+     */
+    async setConfig(key, value) {
+        return new Promise((resolve, reject) => {
+            this.db.run(
+                'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
+                [key, JSON.stringify(value)],
+                (err) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                }
+            );
+        });
+    }
+
+    /**
+     * 获取所有域名
+     */
+    async getDomains() {
+        return new Promise((resolve, reject) => {
+            if (!this.db) {
+                reject(new Error('数据库未初始化'));
+                return;
+            }
+            
+            this.db.all('SELECT domain FROM domains ORDER BY created_at', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows.map(row => row.domain));
+                }
+            });
+        });
+    }
+
+    /**
+     * 添加域名
+     */
+    async addDomain(domain) {
+        return new Promise((resolve, reject) => {
+            this.db.run('INSERT OR IGNORE INTO domains (domain) VALUES (?)', [domain], (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 删除域名
+     */
+    async removeDomain(domain) {
+        return new Promise((resolve, reject) => {
+            this.db.run('DELETE FROM domains WHERE domain = ?', [domain], (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 获取所有邮箱
+     */
+    async getEmails() {
+        return new Promise((resolve, reject) => {
+            this.db.all('SELECT email FROM emails ORDER BY created_at', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows.map(row => row.email));
+                }
+            });
+        });
+    }
+
+    /**
+     * 添加邮箱
+     */
+    async addEmail(email) {
+        return new Promise((resolve, reject) => {
+            this.db.run('INSERT OR IGNORE INTO emails (email) VALUES (?)', [email], (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 删除邮箱
+     */
+    async removeEmail(email) {
+        return new Promise((resolve, reject) => {
+            this.db.run('DELETE FROM emails WHERE email = ?', [email], (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 记录证书检查结果
+     */
+    async recordCertCheck(checkResult) {
+        return new Promise((resolve, reject) => {
+            const sql = `
+                INSERT INTO cert_checks (
+                    domain, status, issuer, subject, valid_from, valid_to,
+                    expiry_date, days_until_expiry, is_valid, is_expiring,
+                    fingerprint, error_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            
+            this.db.run(sql, [
+                checkResult.domain,
+                checkResult.status,
+                checkResult.issuer,
+                checkResult.subject,
+                checkResult.validFrom,
+                checkResult.validTo,
+                checkResult.expiryDate,
+                checkResult.daysUntilExpiry,
+                checkResult.isValid,
+                checkResult.isExpiring,
+                checkResult.fingerprint,
+                checkResult.error
+            ], (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 获取最新的证书检查结果
+     */
+    async getLatestCertChecks() {
+        return new Promise((resolve, reject) => {
+            const sql = `
+                SELECT * FROM cert_checks 
+                WHERE id IN (
+                    SELECT MAX(id) FROM cert_checks 
+                    GROUP BY domain
+                )
+                ORDER BY check_time DESC
+            `;
+            
+            this.db.all(sql, (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+    }
+
+    /**
+     * 记录系统日志
+     */
+    async log(level, message) {
+        return new Promise((resolve, reject) => {
+            this.db.run(
+                'INSERT INTO system_logs (level, message) VALUES (?, ?)',
+                [level, message],
+                (err) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                }
+            );
+        });
+    }
+
+    /**
+     * 关闭数据库连接
+     */
+    close() {
+        if (this.db) {
+            this.db.close();
+        }
+    }
+}
+
+module.exports = new Database();
