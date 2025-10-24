@@ -252,6 +252,9 @@ class EmailService {
      */
     async sendDailyReport(toEmails, reportData) {
         try {
+            // 重新初始化邮件传输器以使用数据库中的SMTP配置
+            await this.reinitializeTransporter();
+            
             // 确保toEmails是数组
             const emailList = Array.isArray(toEmails) ? toEmails : [toEmails];
             
@@ -429,8 +432,12 @@ class EmailService {
                 </div>
             `;
 
+            // 获取发送方邮箱地址
+            const config = await configManager.getConfig();
+            const fromEmail = config.smtpConfig ? config.smtpConfig.from : (process.env.FROM_EMAIL || process.env.SMTP_USER);
+            
             const mailOptions = {
-                from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                from: fromEmail,
                 to: validEmails.join(','),
                 subject: `📊 SSL证书监控日报 - ${currentDate}`,
                 html: htmlContent

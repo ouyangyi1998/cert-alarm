@@ -125,11 +125,30 @@ class ConfigManager {
                 }
             }
             
+            // 加载日报设置
+            const dailyReportSettingsData = await database.getConfig('dailyReportSettings');
+            let dailyReportSettings;
+            try {
+                dailyReportSettings = dailyReportSettingsData ? JSON.parse(dailyReportSettingsData) : {
+                    enabled: false,
+                    time: '08:00',
+                    timezone: 'Asia/Shanghai'
+                };
+            } catch (error) {
+                console.log('解析dailyReportSettings失败，使用默认值:', error.message);
+                dailyReportSettings = {
+                    enabled: false,
+                    time: '08:00',
+                    timezone: 'Asia/Shanghai'
+                };
+            }
+            
             this.config = {
                 domains: domains,
                 emailSettings: emailSettings,
                 scheduleSettings: scheduleSettings,
                 smtpConfig: smtpConfig,
+                dailyReportSettings: dailyReportSettings,
                 lastCheckTime: await database.getConfig('lastCheckTime'),
                 lastEmailSent: await database.getConfig('lastEmailSent')
             };
@@ -157,6 +176,11 @@ class ConfigManager {
             // 保存SMTP配置
             if (config.smtpConfig) {
                 await database.setConfig('smtpConfig', JSON.stringify(config.smtpConfig));
+            }
+            
+            // 保存日报设置
+            if (config.dailyReportSettings) {
+                await database.setConfig('dailyReportSettings', JSON.stringify(config.dailyReportSettings));
             }
             
             // 保存其他配置字段（如果存在且不为null）
@@ -448,6 +472,10 @@ class ConfigManager {
             
             if (newConfig.smtpConfig !== undefined) {
                 updatedConfig.smtpConfig = newConfig.smtpConfig;
+            }
+            
+            if (newConfig.dailyReportSettings !== undefined) {
+                updatedConfig.dailyReportSettings = newConfig.dailyReportSettings;
             }
             
             await this.saveConfig(updatedConfig);

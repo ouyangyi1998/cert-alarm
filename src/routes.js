@@ -68,7 +68,8 @@ router.get('/status', async (req, res) => {
                     domains: config.domains,
                     emailSettings: config.emailSettings,
                     scheduleSettings: config.scheduleSettings,
-                    smtpConfig: config.smtpConfig
+                    smtpConfig: config.smtpConfig,
+                    dailyReportSettings: config.dailyReportSettings
                 },
                 scheduler: schedulerStatus,
                 checkResults: checkResults
@@ -145,7 +146,7 @@ router.post('/send-test-email', async (req, res) => {
  */
 router.put('/config', async (req, res) => {
     try {
-        const { domains, emailSettings, scheduleSettings, smtpConfig } = req.body;
+        const { domains, emailSettings, scheduleSettings, smtpConfig, dailyReportSettings } = req.body;
         
         // 验证输入
         if (domains && !Array.isArray(domains)) {
@@ -205,7 +206,8 @@ router.put('/config', async (req, res) => {
             domains,
             emailSettings,
             scheduleSettings,
-            smtpConfig
+            smtpConfig,
+            dailyReportSettings
         });
         
         if (updated) {
