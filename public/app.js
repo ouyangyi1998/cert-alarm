@@ -211,14 +211,15 @@ function loadDomainsTable() {
                 `;
             } else if (domainResult && domainResult.status === 'cloudflare_protected') {
                 // 显示Cloudflare保护状态
+                const lastCheckTime = domainResult.lastCheckTime || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
                         <td><span class="badge bg-info">Cloudflare保护</span></td>
                         <td>-</td>
                         <td>-</td>
+                        <td>${lastCheckTime}</td>
                         <td>
-                            <small class="text-muted text-info">${domainResult.message}</small><br>
                             <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                                 <i class="bi bi-arrow-clockwise"></i> 重新检查
                             </button>
@@ -230,14 +231,15 @@ function loadDomainsTable() {
                 `;
             } else if (domainResult && domainResult.status === 'error') {
                 // 显示检查失败的具体错误
+                const lastCheckTime = domainResult.lastCheckTime || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
                         <td><span class="badge bg-danger">检查失败</span></td>
                         <td>-</td>
                         <td>-</td>
+                        <td>${lastCheckTime}</td>
                         <td>
-                            <small class="text-muted text-danger">错误: ${domainResult.error}</small><br>
                             <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                                 <i class="bi bi-arrow-clockwise"></i> 重新检查
                             </button>
@@ -249,12 +251,14 @@ function loadDomainsTable() {
                 `;
             } else {
                 // 检查结果存在但状态未知
+                const lastCheckTime = domainResult.lastCheckTime || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
                         <td><span class="badge bg-warning">状态未知</span></td>
                         <td>-</td>
                         <td>-</td>
+                        <td>${lastCheckTime}</td>
                         <td>
                             <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                                 <i class="bi bi-arrow-clockwise"></i> 检查
@@ -274,7 +278,7 @@ function loadDomainsTable() {
                     <td><span class="badge bg-secondary">未检查</span></td>
                     <td>-</td>
                     <td>-</td>
-                    <td>-</td>
+                    <td>未检查</td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                             <i class="bi bi-arrow-clockwise"></i> 检查
