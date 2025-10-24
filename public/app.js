@@ -13,14 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadScheduleConfigs();
     
     // 绑定表单提交事件
-    const emailForm = document.getElementById('email-form');
     const scheduleForm = document.getElementById('schedule-form');
-    
-    if (emailForm) {
-        emailForm.addEventListener('submit', handleEmailFormSubmit);
-    } else {
-        console.warn('email-form not found');
-    }
     
     if (scheduleForm) {
         scheduleForm.addEventListener('submit', handleScheduleFormSubmit);
@@ -676,10 +669,6 @@ function handleAddEmailForm(event) {
     addEmailConfig();
 }
 
-function handleEmailFormSubmit(event) {
-    event.preventDefault();
-    updateEmailConfig();
-}
 
 async function updateEmailConfig() {
     const warningDays = parseInt(document.getElementById('warning-days').value);
@@ -975,10 +964,50 @@ function showAddScheduleModal() {
 
 function handleScheduleFormSubmit(event) {
     event.preventDefault();
-    updateScheduleConfig();
+    
+    const enabled = document.getElementById('schedule-enabled').checked;
+    const time = document.getElementById('schedule-time').value;
+    const timezone = document.getElementById('schedule-timezone').value;
+    
+    // 将时间转换为cron表达式
+    const [hour, minute] = time.split(':');
+    const cronExpression = `${minute} ${hour} * * *`;
+    
+    try {
+        showLoading('正在保存定时任务设置...');
+        
+        const response = await fetch('/api/config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                scheduleSettings: {
+                    enabled: enabled,
+                    cronExpression: cronExpression,
+                    timezone: timezone
+                }
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('定时任务设置保存成功');
+            loadSystemStatus();
+        } else {
+            showError('保存定时任务设置失败: ' + result.message);
+        }
+    } catch (error) {
+        console.error('保存定时任务设置失败:', error);
+        showError('保存定时任务设置失败: ' + error.message);
+    } finally {
+        hideLoading();
+    }
 }
 
-async function updateScheduleConfig() {
+// 删除重复的函数
+async function updateScheduleConfig_DELETED() {
     const enabled = document.getElementById('schedule-enabled').checked;
     const cronExpression = document.getElementById('cron-expression').value.trim();
     const timezone = document.getElementById('timezone').value;
