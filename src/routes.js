@@ -67,7 +67,8 @@ router.get('/status', async (req, res) => {
                 config: {
                     domains: config.domains,
                     emailSettings: config.emailSettings,
-                    scheduleSettings: config.scheduleSettings
+                    scheduleSettings: config.scheduleSettings,
+                    smtpConfig: config.smtpConfig
                 },
                 scheduler: schedulerStatus,
                 checkResults: checkResults
