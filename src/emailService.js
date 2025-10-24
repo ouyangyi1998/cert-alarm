@@ -307,6 +307,7 @@ class EmailService {
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">域名</th>
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">到期时间</th>
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">剩余天数</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">检测时间</th>
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">状态</th>
                                 </tr>
                             </thead>
@@ -321,6 +322,7 @@ class EmailService {
                             <td style="border: 1px solid #dee2e6; padding: 12px; font-weight: bold;">${cert.domain}</td>
                             <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.expiryDate}</td>
                             <td style="border: 1px solid #dee2e6; padding: 12px; color: ${statusColor}; font-weight: bold;">${cert.daysUntilExpiry} 天</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; color: #666; font-size: 12px;">${cert.lastCheckTime || '-'}</td>
                             <td style="border: 1px solid #dee2e6; padding: 12px; color: ${statusColor}; font-weight: bold;">${statusText}</td>
                         </tr>
                     `;
@@ -376,6 +378,7 @@ class EmailService {
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">状态</th>
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">到期时间</th>
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">剩余天数</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">检测时间</th>
                                     <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">颁发者</th>
                                 </tr>
                             </thead>
@@ -408,6 +411,7 @@ class EmailService {
                             <td style="border: 1px solid #dee2e6; padding: 12px; color: ${statusColor}; font-weight: bold;">${statusText}</td>
                             <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.expiryDate || '-'}</td>
                             <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.daysUntilExpiry ? cert.daysUntilExpiry + ' 天' : '-'}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; color: #666; font-size: 12px;">${cert.lastCheckTime || '-'}</td>
                             <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.issuer || '-'}</td>
                         </tr>
                     `;

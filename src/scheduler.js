@@ -58,7 +58,10 @@ class Scheduler {
             this.currentTask = cron.schedule(
                 scheduleSettings.cronExpression,
                 async () => {
+                    // 先执行证书检查
                     await this.executeCertificateCheck();
+                    // 然后执行日报任务
+                    await this.executeDailyReport();
                 },
                 {
                     scheduled: true,

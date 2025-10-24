@@ -77,7 +77,17 @@ class ConfigManager {
     async loadConfigFromDatabase() {
         try {
             console.log('正在从数据库加载配置...');
-            const domains = await database.getDomains();
+            // 从配置中加载域名
+            const domainsData = await database.getConfig('domains');
+            let domains = [];
+            if (domainsData) {
+                try {
+                    domains = JSON.parse(domainsData);
+                } catch (error) {
+                    console.log('解析domains配置失败，使用空数组:', error.message);
+                    domains = [];
+                }
+            }
             console.log('加载的域名:', domains);
             const emails = await database.getEmails();
             console.log('加载的邮箱:', emails);
@@ -127,20 +137,34 @@ class ConfigManager {
             
             // 加载日报设置
             const dailyReportSettingsData = await database.getConfig('dailyReportSettings');
+            console.log('从数据库加载日报设置:', dailyReportSettingsData);
             let dailyReportSettings;
-            try {
-                dailyReportSettings = dailyReportSettingsData ? JSON.parse(dailyReportSettingsData) : {
-                    enabled: false,
-                    time: '08:00',
-                    timezone: 'Asia/Shanghai'
-                };
-            } catch (error) {
-                console.log('解析dailyReportSettings失败，使用默认值:', error.message);
+            if (dailyReportSettingsData) {
+                try {
+                    // 处理可能的双重JSON编码问题
+                    if (typeof dailyReportSettingsData === 'string') {
+                        // 如果是字符串，尝试解析JSON
+                        dailyReportSettings = JSON.parse(dailyReportSettingsData);
+                    } else {
+                        // 如果已经是对象，直接使用
+                        dailyReportSettings = dailyReportSettingsData;
+                    }
+                    console.log('使用数据库中的日报设置:', dailyReportSettings);
+                } catch (parseError) {
+                    console.log('解析日报设置失败，使用默认设置:', parseError.message);
+                    dailyReportSettings = {
+                        enabled: false,
+                        time: '08:00',
+                        timezone: 'Asia/Shanghai'
+                    };
+                }
+            } else {
                 dailyReportSettings = {
                     enabled: false,
                     time: '08:00',
                     timezone: 'Asia/Shanghai'
                 };
+                console.log('使用默认日报设置:', dailyReportSettings);
             }
             
             this.config = {
@@ -169,6 +193,11 @@ class ConfigManager {
      */
     async saveConfig(config) {
         try {
+            // 保存域名配置
+            if (config.domains !== undefined) {
+                await database.setConfig('domains', JSON.stringify(config.domains));
+            }
+            
             // 只保存到数据库
             await database.setConfig('emailSettings', JSON.stringify(config.emailSettings));
             await database.setConfig('scheduleSettings', JSON.stringify(config.scheduleSettings));
@@ -179,8 +208,12 @@ class ConfigManager {
             }
             
             // 保存日报设置
-            if (config.dailyReportSettings) {
+            console.log('检查日报设置:', config.dailyReportSettings);
+            if (config.dailyReportSettings !== undefined && config.dailyReportSettings !== null) {
+                console.log('保存日报设置:', config.dailyReportSettings);
                 await database.setConfig('dailyReportSettings', JSON.stringify(config.dailyReportSettings));
+            } else {
+                console.log('没有日报设置需要保存');
             }
             
             // 保存其他配置字段（如果存在且不为null）
@@ -453,6 +486,7 @@ class ConfigManager {
      */
     async updateConfig(newConfig) {
         try {
+            console.log('updateConfig 被调用，参数:', newConfig);
             const currentConfig = await this.getConfig();
             
             // 合并配置，只更新提供的字段
@@ -475,6 +509,7 @@ class ConfigManager {
             }
             
             if (newConfig.dailyReportSettings !== undefined) {
+                console.log('更新日报设置:', newConfig.dailyReportSettings);
                 updatedConfig.dailyReportSettings = newConfig.dailyReportSettings;
             }
             

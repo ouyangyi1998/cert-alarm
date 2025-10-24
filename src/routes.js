@@ -147,6 +147,7 @@ router.post('/send-test-email', async (req, res) => {
 router.put('/config', async (req, res) => {
     try {
         const { domains, emailSettings, scheduleSettings, smtpConfig, dailyReportSettings } = req.body;
+        console.log('收到配置更新请求:', { domains, emailSettings, scheduleSettings, smtpConfig, dailyReportSettings });
         
         // 验证输入
         if (domains && !Array.isArray(domains)) {
@@ -241,11 +242,23 @@ router.get('/certificate/:domain', async (req, res) => {
         const { domain } = req.params;
         const result = await certChecker.checkCertificate(domain);
         
+        // 保存检查结果到数据库
+        await certChecker.saveCheckResult(result);
+        
         res.json({
             success: true,
             data: result
         });
     } catch (error) {
+        // 即使检查失败，也要保存错误结果到数据库
+        const errorResult = {
+            domain: domain,
+            status: 'error',
+            error: error.message,
+            lastCheckTime: new Date().toLocaleString()
+        };
+        await certChecker.saveCheckResult(errorResult);
+        
         res.status(500).json({
             success: false,
             message: '获取证书信息失败',

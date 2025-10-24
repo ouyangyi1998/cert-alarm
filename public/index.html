@@ -119,37 +119,70 @@
         <div class="tab-content" id="mainTabsContent">
             <!-- 概览标签页 -->
             <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                <!-- 最近检查结果卡片 -->
                 <div class="card mt-3">
-                    <div class="card-header">
-                        <h5 class="mb-0">系统概览</h5>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up"></i> 最近检查结果
+                        </h5>
+                        <div>
+                            <span class="badge bg-info" id="check-time-badge">检查时间: 加载中...</span>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6>最近检查结果</h6>
-                                <div id="recent-check-results">
-                                    <p class="text-muted">暂无检查结果</p>
-                                </div>
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-outline-info" onclick="showDetailedResults()">
-                                        <i class="bi bi-list-ul"></i> 查看详细信息
-                                    </button>
-                                </div>
+                        <!-- 域名列表 -->
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>域名</th>
+                                        <th>状态</th>
+                                        <th>到期时间</th>
+                                        <th>剩余天数</th>
+                                        <th>最后检查</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overview-domains-table">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">
+                                            <i class="bi bi-hourglass-split"></i> 正在加载数据...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="mt-3 d-flex justify-content-between">
+                            <div>
+                                <button class="btn btn-primary me-2" onclick="manualCheck()">
+                                    <i class="bi bi-arrow-clockwise"></i> 手动检查
+                                </button>
                             </div>
-                            <div class="col-md-6">
-                                <h6>系统状态</h6>
-                                <div id="system-status">
-                                    <p class="text-muted">加载中...</p>
-                                </div>
+                            <div>
+                                <button class="btn btn-outline-info btn-sm" onclick="showDetailedResults()">
+                                    <i class="bi bi-list-ul"></i> 查看详细信息
+                                </button>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <button class="btn btn-primary" onclick="manualCheck()">
-                                <i class="bi bi-arrow-clockwise"></i> 手动检查
-                            </button>
-                            <button class="btn btn-success" onclick="refreshStatus()">
-                                <i class="bi bi-arrow-repeat"></i> 刷新状态
-                            </button>
+                    </div>
+                </div>
+
+                <!-- 系统状态卡片 -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-gear"></i> 系统状态
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="system-status">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <p class="mt-2 text-muted">正在加载系统状态...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -160,9 +193,14 @@
                 <div class="card mt-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">域名管理</h5>
-                        <button class="btn btn-primary btn-sm" onclick="showAddDomainModal()">
-                            <i class="bi bi-plus"></i> 添加域名
-                        </button>
+                        <div>
+                            <button class="btn btn-outline-secondary btn-sm me-2" onclick="refreshDomainsTable()">
+                                <i class="bi bi-arrow-clockwise"></i> 刷新
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="showAddDomainModal()">
+                                <i class="bi bi-plus"></i> 添加域名
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">

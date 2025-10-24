@@ -16,6 +16,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     loadSystemStatus();
     
+    // 添加延迟刷新机制，确保数据加载完成
+    setTimeout(() => {
+        console.log('延迟刷新域名表格...');
+        loadDomainsTable();
+    }, 1000);
+    
     // 绑定表单提交事件
     const scheduleForm = document.getElementById('schedule-form');
     
@@ -42,21 +48,39 @@ async function loadSystemStatus() {
             currentData = result.data;
             console.log('当前数据:', currentData);
             
-            updateSystemStatus(result.data);
-            // 数据加载完成后，更新配置显示
-            loadDomainsTable();
-            loadEmailConfigs();
-            loadScheduleConfigs();
+            try {
+                console.log('准备调用updateSystemStatus，数据:', result.data);
+                updateSystemStatus(result.data);
+                // 数据加载完成后，更新配置显示
+                console.log('开始更新界面组件...');
+                loadDomainsTable();
+                loadEmailConfigs();
+                loadScheduleConfigs();
+                console.log('界面组件更新完成');
+            } catch (error) {
+                console.error('更新界面失败:', error);
+                console.error('错误详情:', error.stack);
+                showError('界面更新失败: ' + error.message);
+            }
             
             // 更新概览卡片（在设置currentData之后）
             updateOverviewCards(result.data);
             
+            // 更新概览页面的域名表格
+            updateOverviewDomainsTable(result.data);
+            
             // 如果有检查结果，更新概况页面
             if (currentData.checkResults && currentData.checkResults.results) {
                 console.log('更新检查结果:', currentData.checkResults);
+                console.log('检查结果统计:', {
+                    total: currentData.checkResults.total,
+                    healthy: currentData.checkResults.healthy,
+                    expiring: currentData.checkResults.expiring,
+                    failed: currentData.checkResults.failed
+                });
                 updateRecentCheckResults(currentData.checkResults);
             } else {
-                console.log('没有检查结果数据');
+                console.log('没有检查结果数据，currentData:', currentData);
             }
         } else {
             showError('获取系统状态失败: ' + result.message);
@@ -76,17 +100,38 @@ async function loadSystemStatus() {
 // 更新系统状态显示
 function updateSystemStatus(data) {
     const statusElement = document.getElementById('system-status');
-    if (!statusElement) return;
+    if (!statusElement) {
+        console.error('system-status 元素未找到');
+        return;
+    }
     
-    const scheduler = data.scheduler;
-    const config = data.config;
+    try {
+        // 确保data存在且是对象
+        if (!data || typeof data !== 'object') {
+            console.error('updateSystemStatus: data 不是有效对象', data);
+            statusElement.innerHTML = '<p class="text-danger">数据格式错误</p>';
+            return;
+        }
+        
+        // 安全地获取scheduler和config对象
+        const scheduler = (data && data.scheduler) ? data.scheduler : {};
+        const config = (data && data.config) ? data.config : {};
+        
+        console.log('updateSystemStatus - 原始data:', data);
+        console.log('updateSystemStatus - scheduler:', scheduler);
+        console.log('updateSystemStatus - config:', config);
+        
+        // 验证scheduler对象
+        if (!scheduler || typeof scheduler !== 'object') {
+            console.warn('scheduler 不是有效对象:', scheduler);
+        }
     
     let statusHtml = `
         <div class="row">
             <div class="col-6">
-                <strong>定时任务:</strong> ${scheduler.taskActive ? '已启用' : '已禁用'}<br>
-                <strong>执行时间:</strong> ${scheduler.cronExpression}<br>
-                <strong>时区:</strong> ${scheduler.timezone}
+                <strong>定时任务:</strong> ${scheduler && scheduler.taskActive ? '已启用' : '已禁用'}<br>
+                <strong>执行时间:</strong> ${scheduler && scheduler.cronExpression ? scheduler.cronExpression : '未设置'}<br>
+                <strong>时区:</strong> ${scheduler && scheduler.timezone ? scheduler.timezone : '未设置'}
             </div>
             <div class="col-6">
                 <strong>监控域名:</strong> ${config.domains.length} 个<br>
@@ -96,11 +141,15 @@ function updateSystemStatus(data) {
         </div>
     `;
     
-    if (scheduler.lastCheckTime) {
+    if (scheduler && scheduler.lastCheckTime) {
         statusHtml += `<br><strong>最后检查:</strong> ${scheduler.lastCheckTime}`;
     }
     
-    statusElement.innerHTML = statusHtml;
+        statusElement.innerHTML = statusHtml;
+    } catch (error) {
+        console.error('更新系统状态失败:', error);
+        statusElement.innerHTML = '<p class="text-danger">系统状态更新失败</p>';
+    }
 }
 
 // 更新概览卡片
@@ -110,18 +159,20 @@ function updateOverviewCards(data) {
     const config = data.config;
     const domains = config.domains || [];
     
-    // 更新监控域名数量
+    // 更新顶部统计卡片
     const totalDomainsElement = document.getElementById('total-domains');
     if (totalDomainsElement) {
         totalDomainsElement.textContent = domains.length;
         console.log('更新监控域名数量:', domains.length);
     }
     
+    
     // 如果有检查结果，更新其他卡片
     if (data.checkResults) {
         const results = data.checkResults;
         console.log('检查结果:', results);
         
+        // 更新顶部统计卡片
         const healthyElement = document.getElementById('healthy-certs');
         const expiringElement = document.getElementById('expiring-certs');
         const failedElement = document.getElementById('failed-certs');
@@ -138,6 +189,14 @@ function updateOverviewCards(data) {
             failedElement.textContent = results.failed || 0;
             console.log('更新检查失败数量:', results.failed || 0);
         }
+        
+        
+        // 更新检查时间
+        const checkTimeBadge = document.getElementById('check-time-badge');
+        if (checkTimeBadge && results.lastCheckTime) {
+            checkTimeBadge.textContent = `检查时间: ${results.lastCheckTime}`;
+        }
+        
     } else {
         console.log('没有检查结果数据，显示默认值');
         // 默认显示0
@@ -148,6 +207,7 @@ function updateOverviewCards(data) {
         if (healthyElement) healthyElement.textContent = '0';
         if (expiringElement) expiringElement.textContent = '0';
         if (failedElement) failedElement.textContent = '0';
+        
     }
 }
 
@@ -209,17 +269,26 @@ async function loadSystemData() {
 
 // 加载域名表格
 function loadDomainsTable() {
+    console.log('loadDomainsTable 被调用');
     const domainsTable = document.getElementById('domains-table');
-    if (!domainsTable || !currentData) return;
-    
-    const domains = currentData.config.domains || [];
-    
-    if (domains.length === 0) {
-        domainsTable.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无域名</td></tr>';
+    if (!domainsTable) {
+        console.log('domains-table 元素未找到');
+        return;
+    }
+    if (!currentData) {
+        console.log('currentData 为空');
         return;
     }
     
-    let tableHtml = '';
+    const domains = currentData.config.domains || [];
+    console.log('域名列表:', domains);
+    
+    if (domains.length === 0) {
+        domainsTable.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无域名</td></tr>';
+        return;
+    }
+    
+    let tableHtml = '<tbody>';
     domains.forEach(domain => {
         // 如果有检查结果，显示详细信息
         if (currentData.checkResults && currentData.checkResults.results) {
@@ -230,7 +299,7 @@ function loadDomainsTable() {
                 const statusText = domainResult.daysUntilExpiry <= 7 ? '紧急' : 
                                  domainResult.daysUntilExpiry <= 30 ? '即将到期' : '正常';
                 
-                const lastCheckTime = domainResult.lastCheckTime || '未检查';
+                const lastCheckTime = (domainResult && domainResult.lastCheckTime) || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
@@ -250,7 +319,7 @@ function loadDomainsTable() {
                 `;
             } else if (domainResult && domainResult.status === 'cloudflare_protected') {
                 // 显示Cloudflare保护状态
-                const lastCheckTime = domainResult.lastCheckTime || '未检查';
+                const lastCheckTime = (domainResult && domainResult.lastCheckTime) || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
@@ -270,7 +339,7 @@ function loadDomainsTable() {
                 `;
             } else if (domainResult && domainResult.status === 'error') {
                 // 显示检查失败的具体错误
-                const lastCheckTime = domainResult.lastCheckTime || '未检查';
+                const lastCheckTime = (domainResult && domainResult.lastCheckTime) || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
@@ -290,7 +359,7 @@ function loadDomainsTable() {
                 `;
             } else {
                 // 检查结果存在但状态未知
-                const lastCheckTime = domainResult.lastCheckTime || '未检查';
+                const lastCheckTime = (domainResult && domainResult.lastCheckTime) || '未检查';
                 tableHtml += `
                     <tr>
                         <td>${domain}</td>
@@ -331,6 +400,7 @@ function loadDomainsTable() {
         }
     });
     
+    tableHtml += '</tbody>';
     domainsTable.innerHTML = tableHtml;
 }
 
@@ -352,6 +422,8 @@ async function manualCheck() {
             currentData.checkResults = result.data;
             updateOverviewCards(currentData);
             updateRecentCheckResults(result.data);
+            // 自动刷新概览页面的域名表格
+            updateOverviewDomainsTable(currentData);
             showSuccess('证书检查完成');
         } else {
             showError('证书检查失败: ' + result.message);
@@ -622,6 +694,13 @@ function refreshLogs() {
     showSuccess('日志刷新功能待实现');
 }
 
+// 手动刷新域名表格
+function refreshDomainsTable() {
+    console.log('手动刷新域名表格...');
+    loadDomainsTable();
+    showSuccess('域名表格已刷新');
+}
+
 // 清空日志
 function clearLogs() {
     const logsContent = document.getElementById('logs-content');
@@ -661,7 +740,8 @@ function loadEmailConfigs() {
                                 服务器: ${smtpConfig.host}:${smtpConfig.port} | 
                                 用户: ${smtpConfig.user} | 
                                 发送方: ${smtpConfig.from} | 
-                                安全连接: ${smtpConfig.secure ? '是' : '否'}
+                                安全连接: ${smtpConfig.secure ? '是' : '否'} | 
+                                密码: ${'*'.repeat(8)} (已隐藏)
                             </small>
                         </div>
                     </div>
@@ -1232,97 +1312,154 @@ function loadDetailedResults() {
     const results = currentData.checkResults.results;
     const warningDays = currentData.config.emailSettings.warningDays || 30;
     
+    // 按状态分组
+    const healthyCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry > warningDays);
+    const expiringCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry <= warningDays && r.daysUntilExpiry > 7);
+    const urgentCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry <= 7);
+    const failedCerts = results.filter(r => r.status === 'error');
+    
     let html = `
-        <div class="row mb-3">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h5><i class="bi bi-info-circle"></i> 证书状态分析</h5>
+                <p class="text-muted">基于当前检查结果的详细分析报告</p>
+            </div>
+        </div>
+        
+        <!-- 状态统计 -->
+        <div class="row mb-4">
             <div class="col-md-3">
-                <div class="card bg-primary text-white">
+                <div class="card border-success">
                     <div class="card-body text-center">
-                        <h4>${results.length}</h4>
-                        <small>总计检查</small>
+                        <h4 class="text-success">${healthyCerts.length}</h4>
+                        <small class="text-muted">健康证书</small>
+                        <div class="mt-2">
+                            <small class="text-success">剩余天数 > ${warningDays}天</small>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-success text-white">
+                <div class="card border-warning">
                     <div class="card-body text-center">
-                        <h4>${currentData.checkResults.healthy || 0}</h4>
-                        <small>正常证书</small>
+                        <h4 class="text-warning">${expiringCerts.length}</h4>
+                        <small class="text-muted">即将到期</small>
+                        <div class="mt-2">
+                            <small class="text-warning">7-${warningDays}天内到期</small>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-warning text-white">
+                <div class="card border-danger">
                     <div class="card-body text-center">
-                        <h4>${currentData.checkResults.expiring || 0}</h4>
-                        <small>即将到期</small>
+                        <h4 class="text-danger">${urgentCerts.length}</h4>
+                        <small class="text-muted">紧急证书</small>
+                        <div class="mt-2">
+                            <small class="text-danger">≤7天内到期</small>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-danger text-white">
+                <div class="card border-secondary">
                     <div class="card-body text-center">
-                        <h4>${currentData.checkResults.failed || 0}</h4>
-                        <small>检查失败</small>
+                        <h4 class="text-secondary">${failedCerts.length}</h4>
+                        <small class="text-muted">检查失败</small>
+                        <div class="mt-2">
+                            <small class="text-secondary">无法获取证书信息</small>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>域名</th>
-                        <th>状态</th>
-                        <th>签发机构</th>
-                        <th>到期时间</th>
-                        <th>剩余天数</th>
-                        <th>最后检查</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <!-- 详细证书信息 -->
+        <div class="row">
+            <div class="col-md-12">
+                <h6><i class="bi bi-list-ul"></i> 证书详细信息</h6>
+                <div class="accordion" id="certificateAccordion">
     `;
     
-    results.forEach(result => {
-        let statusClass, statusText;
+    // 按紧急程度排序显示
+    const sortedResults = [...urgentCerts, ...expiringCerts, ...healthyCerts, ...failedCerts];
+    
+    sortedResults.forEach((result, index) => {
+        let statusClass, statusText, cardClass;
         
         if (result.status === 'success') {
             if (result.daysUntilExpiry <= 7) {
                 statusClass = 'danger';
                 statusText = '紧急';
+                cardClass = 'border-danger';
             } else if (result.daysUntilExpiry <= warningDays) {
                 statusClass = 'warning';
                 statusText = '即将到期';
+                cardClass = 'border-warning';
             } else {
                 statusClass = 'success';
                 statusText = '正常';
+                cardClass = 'border-success';
             }
         } else {
             statusClass = 'danger';
             statusText = '检查失败';
+            cardClass = 'border-secondary';
         }
         
         html += `
-            <tr>
-                <td><strong>${result.domain}</strong></td>
-                <td><span class="badge bg-${statusClass}">${statusText}</span></td>
-                <td>${result.issuer || '-'}</td>
-                <td>${result.expiryDate || '-'}</td>
-                <td>${result.daysUntilExpiry !== undefined ? result.daysUntilExpiry + ' 天' : '-'}</td>
-                <td>${result.lastCheckTime || '-'}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${result.domain}')">
-                        <i class="bi bi-arrow-clockwise"></i> 重新检查
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading${index}">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}">
+                        <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                            <div>
+                                <strong>${result.domain}</strong>
+                                <span class="badge bg-${statusClass} ms-2">${statusText}</span>
+                            </div>
+                            <div class="text-muted">
+                                <small>${result.daysUntilExpiry !== undefined ? result.daysUntilExpiry + ' 天' : '未知'}</small>
+                            </div>
+                        </div>
                     </button>
-                </td>
-            </tr>
+                </h2>
+                <div id="collapse${index}" class="accordion-collapse collapse" data-bs-parent="#certificateAccordion">
+                    <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-shield-check"></i> 证书信息</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>签发机构:</strong></td><td>${result.issuer || '-'}</td></tr>
+                                    <tr><td><strong>证书主题:</strong></td><td>${result.subject || '-'}</td></tr>
+                                    <tr><td><strong>有效期开始:</strong></td><td>${result.validFrom || '-'}</td></tr>
+                                    <tr><td><strong>有效期结束:</strong></td><td>${result.expiryDate || '-'}</td></tr>
+                                    <tr><td><strong>剩余天数:</strong></td><td><span class="badge bg-${statusClass}">${result.daysUntilExpiry !== undefined ? result.daysUntilExpiry + ' 天' : '未知'}</span></td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-clock"></i> 检查信息</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>检查状态:</strong></td><td><span class="badge bg-${statusClass}">${statusText}</span></td></tr>
+                                    <tr><td><strong>最后检查:</strong></td><td>${result.lastCheckTime || '-'}</td></tr>
+                                    <tr><td><strong>检查方法:</strong></td><td>${result.method || '-'}</td></tr>
+                                    <tr><td><strong>指纹信息:</strong></td><td><code class="small">${result.fingerprint || '-'}</code></td></tr>
+                                    <tr><td><strong>检查消息:</strong></td><td><small class="text-muted">${result.message || '-'}</small></td></tr>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomainFromDetails('${result.domain}')">
+                                <i class="bi bi-arrow-clockwise"></i> 重新检查
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
     });
     
     html += `
-                </tbody>
-            </table>
+                </div>
+            </div>
         </div>
     `;
     
@@ -1334,6 +1471,130 @@ function refreshDetailedResults() {
     showSuccess('详细结果已刷新');
 }
 
+// 从详细信息页面检查单个域名
+async function checkSingleDomainFromDetails(domain) {
+    // 防止重复检查
+    if (checkingDomains.has(domain)) {
+        showWarning(`域名 ${domain} 正在检查中，请稍候...`);
+        return;
+    }
+    
+    checkingDomains.add(domain);
+    showLoading(`正在检查域名 ${domain}...`);
+    
+    try {
+        const response = await fetch(`/api/certificate/${encodeURIComponent(domain)}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            // 更新当前数据中的检查结果
+            if (!currentData.checkResults) {
+                currentData.checkResults = { 
+                    results: [],
+                    healthy: 0,
+                    expiring: 0,
+                    failed: 0,
+                    total: 0,
+                    expiringCerts: [],
+                    failedCerts: [],
+                    lastCheckTime: null
+                };
+            }
+            
+            // 更新或添加该域名的检查结果
+            const existingIndex = currentData.checkResults.results.findIndex(r => r.domain === domain);
+            const checkResult = {
+                ...result.data,
+                domain: domain,
+                lastCheckTime: new Date().toLocaleString()
+            };
+            
+            if (existingIndex >= 0) {
+                currentData.checkResults.results[existingIndex] = checkResult;
+            } else {
+                currentData.checkResults.results.push(checkResult);
+            }
+            
+            // 更新最后检查时间
+            currentData.checkResults.lastCheckTime = new Date().toLocaleString();
+            
+            // 重新计算统计数据
+            updateCheckResultsStats();
+            
+            // 更新概况页面
+            updateRecentCheckResults(currentData.checkResults);
+            
+            // 重新加载域名表格以显示最新状态
+            loadDomainsTable();
+            
+            // 更新概览页面的域名表格
+            updateOverviewDomainsTable(currentData);
+            
+            // 刷新详细信息页面
+            loadDetailedResults();
+            
+            showSuccess(`域名 ${domain} 检查完成`);
+        } else {
+            // 处理检查失败的情况
+            const errorResult = {
+                domain: domain,
+                status: 'error',
+                error: result.message,
+                lastCheckTime: new Date().toLocaleString()
+            };
+            
+            // 更新当前数据中的检查结果
+            if (!currentData.checkResults) {
+                currentData.checkResults = { 
+                    results: [],
+                    healthy: 0,
+                    expiring: 0,
+                    failed: 0,
+                    total: 0,
+                    expiringCerts: [],
+                    failedCerts: [],
+                    lastCheckTime: null
+                };
+            }
+            
+            // 更新或添加该域名的检查结果
+            const existingIndex = currentData.checkResults.results.findIndex(r => r.domain === domain);
+            
+            if (existingIndex >= 0) {
+                currentData.checkResults.results[existingIndex] = errorResult;
+            } else {
+                currentData.checkResults.results.push(errorResult);
+            }
+            
+            // 更新最后检查时间
+            currentData.checkResults.lastCheckTime = new Date().toLocaleString();
+            
+            // 重新计算统计数据
+            updateCheckResultsStats();
+            
+            // 更新概况页面
+            updateRecentCheckResults(currentData.checkResults);
+            
+            // 重新加载域名表格以显示最新状态
+            loadDomainsTable();
+            
+            // 更新概览页面的域名表格
+            updateOverviewDomainsTable(currentData);
+            
+            // 刷新详细信息页面
+            loadDetailedResults();
+            
+            showError(`域名 ${domain} 检查失败: ${result.message}`);
+        }
+    } catch (error) {
+        console.error('检查域名失败:', error);
+        showError(`域名 ${domain} 检查失败: ${error.message}`);
+    } finally {
+        checkingDomains.delete(domain);
+        hideLoading();
+    }
+}
+
 // 检查状态管理
 let checkingDomains = new Set();
 
@@ -1341,7 +1602,6 @@ let checkingDomains = new Set();
 function autoRefreshData() {
     console.log('自动刷新页面数据...');
     loadSystemStatus();
-    loadSystemData();
 }
 
 // 执行证书检查
@@ -1403,7 +1663,7 @@ function updateDomainStatus(domain, checkResult) {
                 statusCell.innerHTML = `<span class="badge bg-${statusClass}">${statusText}</span>`;
                 expiryCell.textContent = checkResult.expiryDate;
                 daysCell.textContent = `${checkResult.daysUntilExpiry} 天`;
-                checkTimeCell.textContent = checkResult.lastCheckTime;
+                checkTimeCell.textContent = checkResult.lastCheckTime || '未检查';
                 actionCell.innerHTML = `
                     <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                         <i class="bi bi-arrow-clockwise"></i> 检查
@@ -1416,7 +1676,7 @@ function updateDomainStatus(domain, checkResult) {
                 statusCell.innerHTML = '<span class="badge bg-info">Cloudflare保护</span>';
                 expiryCell.textContent = '-';
                 daysCell.textContent = '-';
-                checkTimeCell.textContent = checkResult.lastCheckTime;
+                checkTimeCell.textContent = checkResult.lastCheckTime || '未检查';
                 actionCell.innerHTML = `
                     <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                         <i class="bi bi-arrow-clockwise"></i> 重新检查
@@ -1429,7 +1689,7 @@ function updateDomainStatus(domain, checkResult) {
                 statusCell.innerHTML = '<span class="badge bg-danger">检查失败</span>';
                 expiryCell.textContent = '-';
                 daysCell.textContent = '-';
-                checkTimeCell.textContent = checkResult.lastCheckTime;
+                checkTimeCell.textContent = checkResult.lastCheckTime || '未检查';
                 actionCell.innerHTML = `
                     <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                         <i class="bi bi-arrow-clockwise"></i> 重新检查
@@ -1496,10 +1756,52 @@ async function checkSingleDomain(domain) {
             // 更新概况页面
             updateRecentCheckResults(currentData.checkResults);
             
+            // 重新加载域名表格以显示最新状态
+            loadDomainsTable();
+            
+            // 更新概览页面的域名表格
+            updateOverviewDomainsTable(currentData);
+            
             showSuccess(`域名 ${domain} 检查完成`);
-            // 只刷新当前域名的状态，不重新生成整个表格
-            updateDomainStatus(domain, checkResult);
         } else {
+            // 处理检查失败的情况
+            const errorResult = {
+                domain: domain,
+                status: 'error',
+                error: result.message,
+                lastCheckTime: new Date().toLocaleString()
+            };
+            
+            // 更新当前数据中的检查结果
+            if (!currentData.checkResults) {
+                currentData.checkResults = { 
+                    results: [],
+                    healthy: 0,
+                    expiring: 0,
+                    failed: 0,
+                    total: 0,
+                    expiringCerts: [],
+                    failedCerts: [],
+                    lastCheckTime: null
+                };
+            }
+            
+            const existingIndex = currentData.checkResults.results.findIndex(r => r.domain === domain);
+            if (existingIndex >= 0) {
+                currentData.checkResults.results[existingIndex] = errorResult;
+            } else {
+                currentData.checkResults.results.push(errorResult);
+            }
+            
+            // 重新计算统计数据
+            updateCheckResultsStats();
+            
+            // 更新概况页面
+            updateRecentCheckResults(currentData.checkResults);
+            
+            // 重新加载域名表格以显示最新状态
+            loadDomainsTable();
+            
             showError(`域名 ${domain} 检查失败: ${result.message}`);
         }
     } catch (error) {
@@ -1578,7 +1880,10 @@ async function saveDailyReportSettings() {
         
         if (result.success) {
             showSuccess('日报设置保存成功');
-            loadScheduleConfigs(); // 重新加载配置
+            // 重新加载系统数据以获取最新配置
+            loadSystemStatus();
+            // 重新加载日报设置显示
+            loadDailyReportSettings();
         } else {
             showError('保存日报设置失败: ' + result.message);
         }
@@ -1731,4 +2036,130 @@ async function handleScheduleFormSubmit(event) {
     } finally {
         hideLoading();
     }
+}
+
+// 更新概览页面的域名表格
+function updateOverviewDomainsTable(data) {
+    const tableBody = document.getElementById('overview-domains-table');
+    if (!tableBody) {
+        console.warn('overview-domains-table 元素未找到');
+        return;
+    }
+    
+    try {
+        // 获取域名列表
+        const domains = data.config && data.config.domains ? data.config.domains : [];
+        const checkResults = data.checkResults && data.checkResults.results ? data.checkResults.results : [];
+        
+        console.log('更新概览域名表格，域名数量:', domains.length);
+        console.log('检查结果数量:', checkResults.length);
+        
+        if (domains.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted">
+                        <i class="bi bi-exclamation-circle"></i> 暂无监控域名
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let tableHtml = '';
+        
+        domains.forEach(domain => {
+            // 查找对应的检查结果
+            const domainResult = checkResults.find(result => result.domain === domain);
+            
+            if (domainResult) {
+                // 有检查结果
+                const statusColor = getStatusColor(domainResult);
+                const statusText = getStatusText(domainResult);
+                const expiryDate = domainResult.expiryDate || '-';
+                const daysUntilExpiry = domainResult.daysUntilExpiry || '-';
+                const lastCheckTime = domainResult.lastCheckTime || '-';
+                
+                tableHtml += `
+                    <tr>
+                        <td><strong>${domain}</strong></td>
+                        <td><span class="badge ${statusColor}">${statusText}</span></td>
+                        <td>${expiryDate}</td>
+                        <td>${daysUntilExpiry}${typeof daysUntilExpiry === 'number' ? ' 天' : ''}</td>
+                        <td><small class="text-muted">${lastCheckTime}</small></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
+                                <i class="bi bi-arrow-clockwise"></i> 检查
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                // 没有检查结果
+                tableHtml += `
+                    <tr>
+                        <td><strong>${domain}</strong></td>
+                        <td><span class="badge bg-secondary">未检查</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><small class="text-muted">-</small></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
+                                <i class="bi bi-arrow-clockwise"></i> 检查
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+        
+        tableBody.innerHTML = tableHtml;
+        
+    } catch (error) {
+        console.error('更新概览域名表格失败:', error);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-danger">
+                    <i class="bi bi-exclamation-triangle"></i> 数据加载失败
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// 获取状态颜色
+function getStatusColor(result) {
+    if (!result || result.status === 'error') {
+        return 'bg-danger';
+    }
+    
+    if (result.daysUntilExpiry !== undefined) {
+        if (result.daysUntilExpiry <= 7) {
+            return 'bg-danger';
+        } else if (result.daysUntilExpiry <= 30) {
+            return 'bg-warning';
+        } else {
+            return 'bg-success';
+        }
+    }
+    
+    return 'bg-secondary';
+}
+
+// 获取状态文本
+function getStatusText(result) {
+    if (!result || result.status === 'error') {
+        return '检查失败';
+    }
+    
+    if (result.daysUntilExpiry !== undefined) {
+        if (result.daysUntilExpiry <= 7) {
+            return '紧急';
+        } else if (result.daysUntilExpiry <= 30) {
+            return '即将到期';
+        } else {
+            return '正常';
+        }
+    }
+    
+    return '未知';
 }
