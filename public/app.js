@@ -7,10 +7,6 @@ let currentData = null;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('SSL证书监控系统前端已加载');
     loadSystemStatus();
-    loadSystemData();
-    loadDomainsTable();
-    loadEmailConfigs();
-    loadScheduleConfigs();
     
     // 绑定表单提交事件
     const scheduleForm = document.getElementById('schedule-form');
@@ -28,11 +24,16 @@ document.addEventListener('DOMContentLoaded', function() {
 // 加载系统状态
 async function loadSystemStatus() {
     try {
+        console.log('开始加载系统状态...');
         const response = await fetch('/api/status');
         const result = await response.json();
         
+        console.log('API响应:', result);
+        
         if (result.success) {
             currentData = result.data;
+            console.log('当前数据:', currentData);
+            
             updateSystemStatus(result.data);
             updateOverviewCards(result.data);
             // 数据加载完成后，更新配置显示
@@ -42,7 +43,10 @@ async function loadSystemStatus() {
             
             // 如果有检查结果，更新概况页面
             if (currentData.checkResults && currentData.checkResults.results) {
+                console.log('更新检查结果:', currentData.checkResults);
                 updateRecentCheckResults(currentData.checkResults);
+            } else {
+                console.log('没有检查结果数据');
             }
         } else {
             showError('获取系统状态失败: ' + result.message);
