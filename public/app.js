@@ -1008,49 +1008,6 @@ function showAddScheduleModal() {
     document.getElementById('schedule-form').scrollIntoView({ behavior: 'smooth' });
 }
 
-function handleScheduleFormSubmit(event) {
-    event.preventDefault();
-    
-    const enabled = document.getElementById('schedule-enabled').checked;
-    const time = document.getElementById('schedule-time').value;
-    const timezone = document.getElementById('schedule-timezone').value;
-    
-    // 将时间转换为cron表达式
-    const [hour, minute] = time.split(':');
-    const cronExpression = `${minute} ${hour} * * *`;
-    
-    try {
-        showLoading('正在保存定时任务设置...');
-        
-        const response = await fetch('/api/config', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                scheduleSettings: {
-                    enabled: enabled,
-                    cronExpression: cronExpression,
-                    timezone: timezone
-                }
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showSuccess('定时任务设置保存成功');
-            loadSystemStatus();
-        } else {
-            showError('保存定时任务设置失败: ' + result.message);
-        }
-    } catch (error) {
-        console.error('保存定时任务设置失败:', error);
-        showError('保存定时任务设置失败: ' + error.message);
-    } finally {
-        hideLoading();
-    }
-}
 
 // 删除重复的函数
 async function updateScheduleConfig_DELETED() {
