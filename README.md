@@ -130,11 +130,46 @@ cert-alarm/
 
 ### 生产环境部署
 
+#### 方法一：使用PM2（推荐）
+
+1. **安装PM2**：
+   ```bash
+   npm install -g pm2
+   ```
+
+2. **部署项目**：
+   ```bash
+   git clone https://github.com/ouyangyi1998/cert-alarm.git
+   cd cert-alarm
+   npm install --production
+   ```
+
+3. **启动服务**：
+   ```bash
+   # 使用PM2启动
+   pm2 start ecosystem.config.js
+   
+   # 保存PM2配置
+   pm2 save
+   
+   # 设置开机自启
+   pm2 startup
+   ```
+
+4. **管理服务**：
+   ```bash
+   pm2 status          # 查看状态
+   pm2 logs cert-alarm # 查看日志
+   pm2 restart cert-alarm # 重启服务
+   pm2 stop cert-alarm    # 停止服务
+   ```
+
+#### 方法二：直接运行
+
 1. 确保服务器已安装Node.js
 2. 克隆项目到服务器
 3. 安装依赖: `npm install --production`
 4. 启动服务: `npm start`
-5. 建议使用PM2等进程管理工具
 
 ### Docker部署
 
