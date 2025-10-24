@@ -6,6 +6,14 @@ let currentData = null;
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     console.log('SSL证书监控系统前端已加载');
+    console.log('开始执行loadSystemStatus...');
+    
+    // 立即更新系统状态显示，避免一直显示"加载中..."
+    const statusElement = document.getElementById('system-status');
+    if (statusElement) {
+        statusElement.innerHTML = '<p class="text-info">正在加载系统数据...</p>';
+    }
+    
     loadSystemStatus();
     
     // 绑定表单提交事件
@@ -56,6 +64,12 @@ async function loadSystemStatus() {
     } catch (error) {
         console.error('加载系统状态失败:', error);
         showError('无法连接到服务器');
+        
+        // 即使出错也要更新系统状态显示
+        const statusElement = document.getElementById('system-status');
+        if (statusElement) {
+            statusElement.innerHTML = '<p class="text-danger">系统状态加载失败，请检查网络连接</p>';
+        }
     }
 }
 
