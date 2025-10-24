@@ -22,7 +22,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('email-form not found');
     }
     
-    // 定时任务配置现在通过模态框处理，不需要表单提交事件
+    if (scheduleForm) {
+        scheduleForm.addEventListener('submit', handleScheduleFormSubmit);
+    } else {
+        console.warn('schedule-form not found');
+    }
     
     // 设置定时刷新（移除自动刷新，避免重复检查）
     // setInterval(loadSystemData, 30000); // 每30秒刷新一次
@@ -874,50 +878,25 @@ async function deleteEmailConfig() {
 
 // 定时任务配置管理相关函数
 function loadScheduleConfigs() {
-    const scheduleConfigList = document.getElementById('schedule-config-list');
-    if (!scheduleConfigList || !currentData) return;
+    if (!currentData) return;
     
     const scheduleSettings = currentData.config.scheduleSettings;
-    const scheduler = currentData.scheduler;
     
-    let html = `
-        <div class="card">
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <strong>状态:</strong> ${scheduleSettings.enabled ? '已启用' : '已禁用'}
-                    </div>
-                    <div class="col-md-4">
-                        <strong>执行时间:</strong> ${scheduleSettings.cronExpression || '未设置'}
-                    </div>
-                    <div class="col-md-4">
-                        <strong>时区:</strong> ${scheduleSettings.timezone || 'Asia/Shanghai'}
-                    </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-md-6">
-                        <strong>任务状态:</strong> ${scheduler.taskActive ? '运行中' : '已停止'}
-                    </div>
-                    <div class="col-md-6">
-                        <strong>最后检查:</strong> ${scheduler.lastCheckTime || '从未检查'}
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-outline-primary" onclick="editScheduleConfig()">
-                        <i class="bi bi-pencil"></i> 编辑
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteScheduleConfig()">
-                        <i class="bi bi-trash"></i> 删除
-                    </button>
-                    <button class="btn btn-sm ${scheduleSettings.enabled ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="toggleSchedule()">
-                        <i class="bi bi-${scheduleSettings.enabled ? 'pause' : 'play'}"></i> ${scheduleSettings.enabled ? '停止' : '启动'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
+    // 加载定时任务设置
+    document.getElementById('schedule-enabled').checked = scheduleSettings.enabled || false;
     
-    scheduleConfigList.innerHTML = html;
+    // 从cron表达式解析时间
+    if (scheduleSettings.cronExpression) {
+        const cronParts = scheduleSettings.cronExpression.split(' ');
+        if (cronParts.length >= 2) {
+            const hour = cronParts[1];
+            const minute = cronParts[0];
+            const timeString = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+            document.getElementById('schedule-time').value = timeString;
+        }
+    }
+    
+    document.getElementById('schedule-timezone').value = scheduleSettings.timezone || 'Asia/Shanghai';
     
     // 加载日报设置
     loadDailyReportSettings();
@@ -1547,6 +1526,123 @@ async function testDailyReport() {
     } catch (error) {
         console.error('测试日报失败:', error);
         showError('测试日报失败: ' + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 保存SMTP配置
+async function saveSmtpConfig() {
+    const smtpConfig = {
+        host: document.getElementById('smtp-host').value,
+        port: parseInt(document.getElementById('smtp-port').value),
+        user: document.getElementById('smtp-user').value,
+        pass: document.getElementById('smtp-pass').value,
+        from: document.getElementById('smtp-from').value,
+        secure: document.getElementById('smtp-secure').value === 'true'
+    };
+    
+    if (!smtpConfig.host || !smtpConfig.port || !smtpConfig.user || !smtpConfig.pass || !smtpConfig.from) {
+        showError('请填写完整的SMTP配置信息');
+        return;
+    }
+    
+    try {
+        showLoading('正在保存SMTP配置...');
+        
+        const response = await fetch('/api/config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                smtpConfig: smtpConfig
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('SMTP配置保存成功');
+            loadEmailConfigs(); // 重新加载配置
+        } else {
+            showError('保存SMTP配置失败: ' + result.message);
+        }
+    } catch (error) {
+        console.error('保存SMTP配置失败:', error);
+        showError('保存SMTP配置失败: ' + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 测试SMTP连接
+async function testSmtpConnection() {
+    try {
+        showLoading('正在测试SMTP连接...');
+        
+        const response = await fetch('/api/verify-email-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('SMTP连接测试成功');
+        } else {
+            showError('SMTP连接测试失败: ' + result.message);
+        }
+    } catch (error) {
+        console.error('测试SMTP连接失败:', error);
+        showError('测试SMTP连接失败: ' + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 处理定时任务表单提交
+async function handleScheduleFormSubmit(event) {
+    event.preventDefault();
+    
+    const enabled = document.getElementById('schedule-enabled').checked;
+    const time = document.getElementById('schedule-time').value;
+    const timezone = document.getElementById('schedule-timezone').value;
+    
+    // 将时间转换为cron表达式
+    const [hour, minute] = time.split(':');
+    const cronExpression = `${minute} ${hour} * * *`;
+    
+    try {
+        showLoading('正在保存定时任务设置...');
+        
+        const response = await fetch('/api/config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                scheduleSettings: {
+                    enabled: enabled,
+                    cronExpression: cronExpression,
+                    timezone: timezone
+                }
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('定时任务设置保存成功');
+            loadSystemStatus(); // 重新加载系统状态
+        } else {
+            showError('保存定时任务设置失败: ' + result.message);
+        }
+    } catch (error) {
+        console.error('保存定时任务设置失败:', error);
+        showError('保存定时任务设置失败: ' + error.message);
     } finally {
         hideLoading();
     }

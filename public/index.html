@@ -206,6 +206,70 @@
                             </div>
                         </div>
                         
+                        <!-- SMTP配置 -->
+                        <div class="mb-4">
+                            <h6>SMTP邮件服务器配置</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    <form id="smtp-form">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="smtp-host" class="form-label">SMTP服务器</label>
+                                                    <input type="text" class="form-control" id="smtp-host" placeholder="smtp.gmail.com">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="smtp-port" class="form-label">端口</label>
+                                                    <input type="number" class="form-control" id="smtp-port" placeholder="587">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="smtp-user" class="form-label">用户名</label>
+                                                    <input type="text" class="form-control" id="smtp-user" placeholder="your-email@gmail.com">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="smtp-pass" class="form-label">密码/应用密码</label>
+                                                    <input type="password" class="form-control" id="smtp-pass" placeholder="your-password">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="smtp-from" class="form-label">发送方邮箱</label>
+                                                    <input type="email" class="form-control" id="smtp-from" placeholder="noreply@example.com">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="smtp-secure" class="form-label">安全连接</label>
+                                                    <select class="form-select" id="smtp-secure">
+                                                        <option value="false">否 (STARTTLS)</option>
+                                                        <option value="true">是 (SSL/TLS)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <button type="button" class="btn btn-primary" onclick="saveSmtpConfig()">
+                                                <i class="bi bi-save"></i> 保存SMTP配置
+                                            </button>
+                                            <button type="button" class="btn btn-outline-success" onclick="testSmtpConnection()">
+                                                <i class="bi bi-check-circle"></i> 测试连接
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- 邮件设置表单 -->
                         <form id="email-form">
                             <div class="row">
@@ -243,11 +307,42 @@
                         <h5 class="mb-0">定时任务设置</h5>
                     </div>
                     <div class="card-body">
-                        <!-- 当前定时任务配置列表 -->
+                        <!-- 定时任务设置 -->
                         <div class="mb-4">
-                            <h6>当前定时任务配置</h6>
-                            <div id="schedule-config-list">
-                                <p class="text-muted">加载中...</p>
+                            <h6>⏰ 定时任务设置</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    <form id="schedule-form">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <div class="form-check mb-3">
+                                                    <input class="form-check-input" type="checkbox" id="schedule-enabled">
+                                                    <label class="form-check-label" for="schedule-enabled">
+                                                        启用定时检查
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="schedule-time" class="form-label">检查时间</label>
+                                                <input type="time" class="form-control" id="schedule-time" value="09:00">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="schedule-timezone" class="form-label">时区</label>
+                                                <select class="form-select" id="schedule-timezone">
+                                                    <option value="Asia/Shanghai">Asia/Shanghai</option>
+                                                    <option value="UTC">UTC</option>
+                                                    <option value="America/New_York">America/New_York</option>
+                                                    <option value="Europe/London">Europe/London</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="bi bi-save"></i> 保存定时任务设置
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                         
@@ -289,46 +384,6 @@
                             </div>
                         </div>
                         
-                        <!-- 编辑定时任务配置的模态框 -->
-                        <div class="modal fade" id="editScheduleModal" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">编辑定时任务配置</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <form id="schedule-form">
-                                            <div class="mb-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="schedule-enabled">
-                                                    <label class="form-check-label" for="schedule-enabled">
-                                                        启用定时检查
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="cron-expression" class="form-label">执行时间 (Cron表达式)</label>
-                                                <input type="text" class="form-control" id="cron-expression" placeholder="0 9 * * *">
-                                                <div class="form-text">例如: 0 9 * * * (每天上午9点)</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="timezone" class="form-label">时区</label>
-                                                <select class="form-select" id="timezone">
-                                                    <option value="Asia/Shanghai">Asia/Shanghai</option>
-                                                    <option value="UTC">UTC</option>
-                                                    <option value="America/New_York">America/New_York</option>
-                                                </select>
-                                            </div>
-                                        </form>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                                        <button type="button" class="btn btn-primary" onclick="saveScheduleConfig()">保存设置</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>

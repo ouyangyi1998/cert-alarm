@@ -311,6 +311,81 @@ class Database {
     }
 
     /**
+     * 保存证书检查结果
+     * @param {Object} checkData - 检查数据
+     * @returns {Promise<void>}
+     */
+    async saveCertCheck(checkData) {
+        return new Promise((resolve, reject) => {
+            if (!this.db) {
+                reject(new Error('数据库未初始化'));
+                return;
+            }
+            
+            const sql = `
+                INSERT INTO cert_checks (
+                    domain, status, issuer, subject, valid_from, valid_to,
+                    expiry_date, days_until_expiry, is_valid, is_expiring,
+                    fingerprint, error_message, check_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            
+            this.db.run(sql, [
+                checkData.domain,
+                checkData.status,
+                checkData.issuer,
+                checkData.subject,
+                checkData.valid_from,
+                checkData.valid_to,
+                checkData.expiry_date,
+                checkData.days_until_expiry,
+                checkData.is_valid,
+                checkData.is_expiring,
+                checkData.fingerprint,
+                checkData.error_message,
+                checkData.check_time
+            ], function(err) {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * 获取最新的证书检查结果
+     * @returns {Promise<Array>} 检查结果列表
+     */
+    async getLatestCertChecks() {
+        return new Promise((resolve, reject) => {
+            if (!this.db) {
+                reject(new Error('数据库未初始化'));
+                return;
+            }
+            
+            const sql = `
+                SELECT c1.* FROM cert_checks c1
+                INNER JOIN (
+                    SELECT domain, MAX(check_time) as max_time
+                    FROM cert_checks
+                    GROUP BY domain
+                ) c2 ON c1.domain = c2.domain AND c1.check_time = c2.max_time
+                ORDER BY c1.check_time DESC
+            `;
+            
+            this.db.all(sql, (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+    }
+
+    /**
      * 关闭数据库连接
      */
     close() {

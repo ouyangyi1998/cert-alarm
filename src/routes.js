@@ -4,6 +4,7 @@ const certChecker = require('./certChecker');
 const emailService = require('./emailService');
 const configManager = require('./configManager');
 const scheduler = require('./scheduler');
+const database = require('./database');
 
 /**
  * 获取系统状态
@@ -16,9 +17,45 @@ router.get('/status', async (req, res) => {
         // 获取最新的检查结果
         let checkResults = null;
         try {
+            // 首先尝试从调度器获取缓存的检查结果
             const lastCheck = await scheduler.getLastCheckResults();
             if (lastCheck) {
                 checkResults = lastCheck;
+            } else {
+                // 如果缓存中没有，从数据库加载最新的检查结果
+                const dbResults = await database.getLatestCertChecks();
+                if (dbResults && dbResults.length > 0) {
+                    // 转换数据库格式为前端需要的格式
+                    const results = dbResults.map(row => ({
+                        domain: row.domain,
+                        status: row.status,
+                        issuer: row.issuer,
+                        subject: row.subject,
+                        validFrom: row.valid_from,
+                        validTo: row.valid_to,
+                        expiryDate: row.expiry_date,
+                        daysUntilExpiry: row.days_until_expiry,
+                        fingerprint: row.fingerprint,
+                        error: row.error_message,
+                        lastCheckTime: new Date(row.check_time).toLocaleString()
+                    }));
+                    
+                    // 分析结果
+                    const healthyCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry > 30);
+                    const expiringCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry <= 30);
+                    const failedCerts = results.filter(r => r.status === 'error');
+                    
+                    checkResults = {
+                        total: results.length,
+                        healthy: healthyCerts.length,
+                        expiring: expiringCerts.length,
+                        failed: failedCerts.length,
+                        results: results,
+                        expiringCerts: expiringCerts,
+                        failedCerts: failedCerts,
+                        lastCheckTime: dbResults[0] ? new Date(dbResults[0].check_time).toLocaleString() : null
+                    };
+                }
             }
         } catch (error) {
             console.log('获取检查结果失败:', error.message);

@@ -1,6 +1,7 @@
 const https = require('https');
 const tls = require('tls');
 const moment = require('moment');
+const database = require('./database');
 
 /**
  * 证书检查器类
@@ -400,20 +401,56 @@ class CertChecker {
         for (const domain of domains) {
             try {
                 const result = await this.checkCertificate(domain);
-                results.push({
+                const successResult = {
                     ...result,
-                    status: 'success'
-                });
+                    status: 'success',
+                    lastCheckTime: new Date().toLocaleString()
+                };
+                results.push(successResult);
+                
+                // 保存检查结果到数据库
+                await this.saveCheckResult(successResult);
             } catch (error) {
-                results.push({
+                const errorResult = {
                     domain: domain,
                     status: 'error',
-                    error: error.message
-                });
+                    error: error.message,
+                    lastCheckTime: new Date().toLocaleString()
+                };
+                results.push(errorResult);
+                
+                // 保存错误结果到数据库
+                await this.saveCheckResult(errorResult);
             }
         }
         
         return results;
+    }
+
+    /**
+     * 保存检查结果到数据库
+     * @param {Object} result - 检查结果
+     */
+    async saveCheckResult(result) {
+        try {
+            await database.saveCertCheck({
+                domain: result.domain,
+                status: result.status,
+                issuer: result.issuer || null,
+                subject: result.subject || null,
+                valid_from: result.validFrom || null,
+                valid_to: result.validTo || null,
+                expiry_date: result.expiryDate || null,
+                days_until_expiry: result.daysUntilExpiry || null,
+                is_valid: result.status === 'success',
+                is_expiring: result.daysUntilExpiry && result.daysUntilExpiry <= 30,
+                fingerprint: result.fingerprint || null,
+                error_message: result.error || null,
+                check_time: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('保存检查结果到数据库失败:', error);
+        }
     }
 
     /**
