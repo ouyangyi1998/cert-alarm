@@ -281,4 +281,20 @@ router.get('/emails', async (req, res) => {
     }
 });
 
+/**
+ * 执行日报任务
+ */
+router.post('/daily-report', async (req, res) => {
+    try {
+        await scheduler.executeDailyReport();
+        res.json({ success: true, message: '日报任务执行成功' });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: '执行日报任务失败',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

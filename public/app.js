@@ -918,6 +918,31 @@ function loadScheduleConfigs() {
     `;
     
     scheduleConfigList.innerHTML = html;
+    
+    // 加载日报设置
+    loadDailyReportSettings();
+}
+
+// 加载日报设置
+function loadDailyReportSettings() {
+    if (!currentData || !currentData.config.dailyReportSettings) return;
+    
+    const dailyReportSettings = currentData.config.dailyReportSettings;
+    
+    // 设置日报设置表单的值
+    const enabledCheckbox = document.getElementById('dailyReportEnabled');
+    const timeInput = document.getElementById('dailyReportTime');
+    const timezoneSelect = document.getElementById('dailyReportTimezone');
+    
+    if (enabledCheckbox) {
+        enabledCheckbox.checked = dailyReportSettings.enabled || false;
+    }
+    if (timeInput) {
+        timeInput.value = dailyReportSettings.time || '08:00';
+    }
+    if (timezoneSelect) {
+        timezoneSelect.value = dailyReportSettings.timezone || 'Asia/Shanghai';
+    }
 }
 
 function showAddScheduleModal() {
@@ -1330,7 +1355,6 @@ function updateDomainStatus(domain, checkResult) {
                 daysCell.textContent = `${checkResult.daysUntilExpiry} 天`;
                 checkTimeCell.textContent = checkResult.lastCheckTime;
                 actionCell.innerHTML = `
-                    <small class="text-muted">检查时间: ${checkResult.lastCheckTime}</small><br>
                     <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                         <i class="bi bi-arrow-clockwise"></i> 检查
                     </button>
@@ -1342,8 +1366,8 @@ function updateDomainStatus(domain, checkResult) {
                 statusCell.innerHTML = '<span class="badge bg-info">Cloudflare保护</span>';
                 expiryCell.textContent = '-';
                 daysCell.textContent = '-';
+                checkTimeCell.textContent = checkResult.lastCheckTime;
                 actionCell.innerHTML = `
-                    <small class="text-muted text-info">${checkResult.message}</small><br>
                     <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                         <i class="bi bi-arrow-clockwise"></i> 重新检查
                     </button>
@@ -1355,8 +1379,8 @@ function updateDomainStatus(domain, checkResult) {
                 statusCell.innerHTML = '<span class="badge bg-danger">检查失败</span>';
                 expiryCell.textContent = '-';
                 daysCell.textContent = '-';
+                checkTimeCell.textContent = checkResult.lastCheckTime;
                 actionCell.innerHTML = `
-                    <small class="text-muted text-danger">错误: ${checkResult.error || '未知错误'}</small><br>
                     <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomain('${domain}')">
                         <i class="bi bi-arrow-clockwise"></i> 重新检查
                     </button>
@@ -1461,6 +1485,68 @@ async function removeDomain(domain) {
     } catch (error) {
         console.error('删除域名失败:', error);
         showError(`域名 ${domain} 删除失败: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 保存日报设置
+async function saveDailyReportSettings() {
+    const enabled = document.getElementById('dailyReportEnabled').checked;
+    const time = document.getElementById('dailyReportTime').value;
+    const timezone = document.getElementById('dailyReportTimezone').value;
+    
+    try {
+        const response = await fetch('/api/config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dailyReportSettings: {
+                    enabled: enabled,
+                    time: time,
+                    timezone: timezone
+                }
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('日报设置保存成功');
+            loadScheduleConfigs(); // 重新加载配置
+        } else {
+            showError('保存日报设置失败: ' + result.message);
+        }
+    } catch (error) {
+        console.error('保存日报设置失败:', error);
+        showError('保存日报设置失败: ' + error.message);
+    }
+}
+
+// 测试日报
+async function testDailyReport() {
+    try {
+        showLoading('正在发送测试日报...');
+        
+        const response = await fetch('/api/daily-report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('测试日报发送成功');
+        } else {
+            showError('测试日报发送失败: ' + result.message);
+        }
+    } catch (error) {
+        console.error('测试日报失败:', error);
+        showError('测试日报失败: ' + error.message);
     } finally {
         hideLoading();
     }

@@ -298,6 +298,47 @@ class Scheduler {
             return null;
         }
     }
+
+    /**
+     * 执行日报任务
+     */
+    async executeDailyReport() {
+        console.log('执行日报任务...');
+        
+        const config = await configManager.getConfig();
+        const dailyReportSettings = config.dailyReportSettings;
+        
+        // 检查日报是否启用
+        if (!dailyReportSettings || !dailyReportSettings.enabled) {
+            console.log('日报功能未启用');
+            return;
+        }
+        
+        // 检查是否有配置的邮箱
+        if (!config.emailSettings.toEmails || config.emailSettings.toEmails.length === 0) {
+            console.log('没有配置接收邮箱，跳过日报发送');
+            return;
+        }
+        
+        try {
+            // 执行证书检查获取最新数据
+            const checkResults = await this.manualCheck();
+            
+            if (checkResults) {
+                // 发送日报邮件
+                console.log('发送日报邮件...');
+                await emailService.sendDailyReport(config.emailSettings.toEmails, checkResults);
+                console.log('日报邮件发送成功');
+                
+                // 更新最后发送时间
+                await configManager.updateConfig({
+                    lastEmailSent: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            console.error('执行日报任务失败:', error);
+        }
+    }
 }
 
 module.exports = new Scheduler();

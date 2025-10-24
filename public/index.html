@@ -113,11 +113,6 @@
                     <i class="bi bi-clock"></i> 定时任务
                 </button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button" role="tab">
-                    <i class="bi bi-list-ul"></i> 日志
-                </button>
-            </li>
         </ul>
 
         <!-- 标签页内容 -->
@@ -256,6 +251,44 @@
                             </div>
                         </div>
                         
+                        <!-- 日报设置 -->
+                        <div class="mb-4">
+                            <h6>📊 每日证书监控日报</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="dailyReportEnabled">
+                                        <label class="form-check-label" for="dailyReportEnabled">
+                                            启用每日证书监控日报
+                                        </label>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="dailyReportTime" class="form-label">发送时间:</label>
+                                            <input type="time" class="form-control" id="dailyReportTime" value="08:00">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="dailyReportTimezone" class="form-label">时区:</label>
+                                            <select class="form-select" id="dailyReportTimezone">
+                                                <option value="Asia/Shanghai">Asia/Shanghai</option>
+                                                <option value="UTC">UTC</option>
+                                                <option value="America/New_York">America/New_York</option>
+                                                <option value="Europe/London">Europe/London</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-info" onclick="saveDailyReportSettings()">
+                                            <i class="bi bi-save"></i> 保存日报设置
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="testDailyReport()">
+                                            <i class="bi bi-send"></i> 测试日报
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- 编辑定时任务配置的模态框 -->
                         <div class="modal fade" id="editScheduleModal" tabindex="-1">
                             <div class="modal-dialog">
@@ -300,23 +333,6 @@
                 </div>
             </div>
 
-            <!-- 日志标签页 -->
-            <div class="tab-pane fade" id="logs" role="tabpanel">
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h5 class="mb-0">系统日志</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="logs-content" class="bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto;">
-                            <p class="text-muted">暂无日志</p>
-                        </div>
-                        <div class="mt-3">
-                            <button class="btn btn-primary" onclick="refreshLogs()">刷新日志</button>
-                            <button class="btn btn-secondary" onclick="clearLogs()">清空日志</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 

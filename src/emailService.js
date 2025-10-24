@@ -195,6 +195,208 @@ class EmailService {
             return false;
         }
     }
+
+    /**
+     * 发送证书监控日报
+     * @param {Array} toEmails - 接收邮箱列表
+     * @param {Object} reportData - 日报数据
+     * @returns {Promise<boolean>} 发送结果
+     */
+    async sendDailyReport(toEmails, reportData) {
+        try {
+            // 确保toEmails是数组
+            const emailList = Array.isArray(toEmails) ? toEmails : [toEmails];
+            
+            // 过滤掉空邮箱
+            const validEmails = emailList.filter(email => email && email.trim());
+            
+            if (validEmails.length === 0) {
+                console.log('没有有效的接收邮箱');
+                return false;
+            }
+
+            const { total, healthy, expiring, failed, results, expiringCerts, failedCerts } = reportData;
+            const currentDate = new Date().toLocaleDateString('zh-CN');
+            
+            // 生成HTML报告
+            let htmlContent = `
+                <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+                    <h2 style="color: #1976d2; text-align: center;">📊 SSL证书监控日报 - ${currentDate}</h2>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                        <h3 style="color: #1976d2; margin-top: 0;">📈 监控概览</h3>
+                        <div style="display: flex; justify-content: space-around; text-align: center;">
+                            <div style="background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <h4 style="margin: 0; color: #666;">总域名数</h4>
+                                <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #333;">${total}</p>
+                            </div>
+                            <div style="background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <h4 style="margin: 0; color: #4caf50;">正常证书</h4>
+                                <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #4caf50;">${healthy}</p>
+                            </div>
+                            <div style="background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <h4 style="margin: 0; color: #ff9800;">即将到期</h4>
+                                <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #ff9800;">${expiring}</p>
+                            </div>
+                            <div style="background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <h4 style="margin: 0; color: #f44336;">检查失败</h4>
+                                <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #f44336;">${failed}</p>
+                            </div>
+                        </div>
+                    </div>
+            `;
+
+            // 添加即将到期的证书
+            if (expiringCerts && expiringCerts.length > 0) {
+                htmlContent += `
+                    <div style="background-color: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                        <h3 style="color: #856404; margin-top: 0;">⚠️ 即将到期的证书</h3>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background-color: #f8f9fa;">
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">域名</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">到期时间</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">剩余天数</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">状态</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                expiringCerts.forEach(cert => {
+                    const statusColor = cert.daysUntilExpiry <= 7 ? '#d32f2f' : '#f57c00';
+                    const statusText = cert.daysUntilExpiry <= 7 ? '紧急' : '即将到期';
+                    htmlContent += `
+                        <tr>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; font-weight: bold;">${cert.domain}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.expiryDate}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; color: ${statusColor}; font-weight: bold;">${cert.daysUntilExpiry} 天</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; color: ${statusColor}; font-weight: bold;">${statusText}</td>
+                        </tr>
+                    `;
+                });
+                
+                htmlContent += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // 添加检查失败的证书
+            if (failedCerts && failedCerts.length > 0) {
+                htmlContent += `
+                    <div style="background-color: #f8d7da; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;">
+                        <h3 style="color: #721c24; margin-top: 0;">❌ 检查失败的证书</h3>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background-color: #f8f9fa;">
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">域名</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">错误信息</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                failedCerts.forEach(cert => {
+                    htmlContent += `
+                        <tr>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; font-weight: bold;">${cert.domain}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; color: #dc3545;">${cert.error}</td>
+                        </tr>
+                    `;
+                });
+                
+                htmlContent += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // 添加所有证书详情
+            if (results && results.length > 0) {
+                htmlContent += `
+                    <div style="background-color: #e7f3ff; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #1976d2;">
+                        <h3 style="color: #1976d2; margin-top: 0;">📋 所有证书详情</h3>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background-color: #f8f9fa;">
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">域名</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">状态</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">到期时间</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">剩余天数</th>
+                                    <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">颁发者</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                results.forEach(cert => {
+                    let statusColor = '#4caf50';
+                    let statusText = '正常';
+                    
+                    if (cert.status === 'success') {
+                        if (cert.daysUntilExpiry <= 7) {
+                            statusColor = '#d32f2f';
+                            statusText = '紧急';
+                        } else if (cert.daysUntilExpiry <= 30) {
+                            statusColor = '#f57c00';
+                            statusText = '即将到期';
+                        }
+                    } else if (cert.status === 'cloudflare_protected') {
+                        statusColor = '#2196f3';
+                        statusText = 'Cloudflare保护';
+                    } else {
+                        statusColor = '#d32f2f';
+                        statusText = '检查失败';
+                    }
+                    
+                    htmlContent += `
+                        <tr>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; font-weight: bold;">${cert.domain}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px; color: ${statusColor}; font-weight: bold;">${statusText}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.expiryDate || '-'}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.daysUntilExpiry ? cert.daysUntilExpiry + ' 天' : '-'}</td>
+                            <td style="border: 1px solid #dee2e6; padding: 12px;">${cert.issuer || '-'}</td>
+                        </tr>
+                    `;
+                });
+                
+                htmlContent += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            htmlContent += `
+                    <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #6c757d;">
+                        <h4 style="color: #495057; margin-top: 0;">📝 报告信息</h4>
+                        <p><strong>报告生成时间:</strong> ${new Date().toLocaleString('zh-CN')}</p>
+                        <p><strong>系统状态:</strong> <span style="color: #28a745;">运行正常</span></p>
+                        <p style="color: #6c757d; font-size: 14px; margin-bottom: 0;">
+                            此报告由SSL证书监控系统自动生成，如有疑问请联系系统管理员。
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            const mailOptions = {
+                from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                to: validEmails.join(','),
+                subject: `📊 SSL证书监控日报 - ${currentDate}`,
+                html: htmlContent
+            };
+
+            const result = await this.transporter.sendMail(mailOptions);
+            console.log(`日报邮件发送成功到 ${validEmails.length} 个邮箱:`, result.messageId);
+            return true;
+
+        } catch (error) {
+            console.error('发送日报邮件失败:', error);
+            return false;
+        }
+    }
 }
 
 module.exports = new EmailService();
