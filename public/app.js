@@ -124,16 +124,20 @@ function updateCheckResultsStats() {
     let healthy = 0;
     let expiring = 0;
     let failed = 0;
+    const expiringCerts = [];
+    const failedCerts = [];
     
     results.forEach(result => {
         if (result.status === 'success') {
             if (result.daysUntilExpiry <= warningDays && result.daysUntilExpiry > 0) {
                 expiring++;
+                expiringCerts.push(result);
             } else if (result.daysUntilExpiry > 0) {
                 healthy++;
             }
         } else {
             failed++;
+            failedCerts.push(result);
         }
     });
     
@@ -141,6 +145,8 @@ function updateCheckResultsStats() {
     currentData.checkResults.expiring = expiring;
     currentData.checkResults.failed = failed;
     currentData.checkResults.total = results.length;
+    currentData.checkResults.expiringCerts = expiringCerts;
+    currentData.checkResults.failedCerts = failedCerts;
     
     // 更新概览卡片
     updateOverviewCards(currentData);
@@ -362,12 +368,12 @@ function updateRecentCheckResults(data) {
             html += `
                 <div class="list-group-item">
                     <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">${result.domain}</h6>
+                        <h6 class="mb-1">${result.domain || '未知域名'}</h6>
                         <span class="badge bg-${statusClass}">${statusText}</span>
                     </div>
                     ${result.status === 'success' ? 
-                        `<p class="mb-1">剩余天数: ${result.daysUntilExpiry} 天</p>` : 
-                        `<p class="mb-1 text-muted">${result.error || result.message}</p>`
+                        `<p class="mb-1">剩余天数: ${result.daysUntilExpiry || 0} 天</p>` : 
+                        `<p class="mb-1 text-muted">${result.error || result.message || '检查失败'}</p>`
                     }
                 </div>
             `;
@@ -1390,13 +1396,23 @@ async function checkSingleDomain(domain) {
         if (result.success) {
             // 更新当前数据中的检查结果
             if (!currentData.checkResults) {
-                currentData.checkResults = { results: [] };
+                currentData.checkResults = { 
+                    results: [],
+                    healthy: 0,
+                    expiring: 0,
+                    failed: 0,
+                    total: 0,
+                    expiringCerts: [],
+                    failedCerts: [],
+                    lastCheckTime: null
+                };
             }
             
             // 更新或添加该域名的检查结果
             const existingIndex = currentData.checkResults.results.findIndex(r => r.domain === domain);
             const checkResult = {
                 ...result.data,
+                domain: domain,
                 lastCheckTime: new Date().toLocaleString()
             };
             
@@ -1405,6 +1421,9 @@ async function checkSingleDomain(domain) {
             } else {
                 currentData.checkResults.results.push(checkResult);
             }
+            
+            // 更新最后检查时间
+            currentData.checkResults.lastCheckTime = new Date().toLocaleString();
             
             // 重新计算统计数据
             updateCheckResultsStats();
