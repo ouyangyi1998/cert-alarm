@@ -144,7 +144,7 @@ router.post('/send-test-email', async (req, res) => {
  */
 router.put('/config', async (req, res) => {
     try {
-        const { domains, emailSettings, scheduleSettings } = req.body;
+        const { domains, emailSettings, scheduleSettings, smtpConfig } = req.body;
         
         // 验证输入
         if (domains && !Array.isArray(domains)) {
@@ -173,11 +173,38 @@ router.put('/config', async (req, res) => {
             }
         }
         
+        // 验证SMTP配置
+        if (smtpConfig) {
+            if (!smtpConfig.host || !smtpConfig.port || !smtpConfig.user || !smtpConfig.pass || !smtpConfig.from) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'SMTP配置不完整，请填写所有必填字段'
+                });
+            }
+            
+            // 验证端口号
+            if (isNaN(smtpConfig.port) || smtpConfig.port < 1 || smtpConfig.port > 65535) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'SMTP端口号必须是1-65535之间的数字'
+                });
+            }
+            
+            // 验证邮箱格式
+            if (!smtpConfig.from.includes('@')) {
+                return res.status(400).json({
+                    success: false,
+                    message: '发送方邮箱格式不正确'
+                });
+            }
+        }
+        
         // 更新配置
         const updated = await configManager.updateConfig({
             domains,
             emailSettings,
-            scheduleSettings
+            scheduleSettings,
+            smtpConfig
         });
         
         if (updated) {

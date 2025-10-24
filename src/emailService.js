@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const moment = require('moment');
+const configManager = require('./configManager');
 
 /**
  * 邮件服务类
@@ -8,6 +9,42 @@ class EmailService {
     constructor() {
         this.transporter = null;
         this.initializeTransporter();
+    }
+
+    /**
+     * 重新初始化邮件传输器（使用数据库中的SMTP配置）
+     */
+    async reinitializeTransporter() {
+        try {
+            const config = await configManager.getConfig();
+            if (config.smtpConfig) {
+                const smtpConfig = config.smtpConfig;
+                const transporterOptions = {
+                    host: smtpConfig.host,
+                    port: smtpConfig.port,
+                    secure: smtpConfig.secure,
+                    auth: {
+                        user: smtpConfig.user,
+                        pass: smtpConfig.pass
+                    },
+                    tls: {
+                        rejectUnauthorized: false
+                    }
+                };
+                
+                this.transporter = nodemailer.createTransporter(transporterOptions);
+                console.log('已使用数据库中的SMTP配置重新初始化邮件传输器');
+                return true;
+            } else {
+                console.log('数据库中没有SMTP配置，使用环境变量');
+                this.initializeTransporter();
+                return false;
+            }
+        } catch (error) {
+            console.error('重新初始化邮件传输器失败:', error);
+            this.initializeTransporter();
+            return false;
+        }
     }
 
     /**
@@ -53,6 +90,8 @@ class EmailService {
      */
     async verifyConnection() {
         try {
+            // 首先尝试使用数据库中的SMTP配置重新初始化
+            await this.reinitializeTransporter();
             await this.transporter.verify();
             return true;
         } catch (error) {
@@ -159,6 +198,9 @@ class EmailService {
      */
     async sendTestEmail(toEmails) {
         try {
+            // 首先尝试使用数据库中的SMTP配置重新初始化
+            await this.reinitializeTransporter();
+            
             // 确保toEmails是数组
             const emailList = Array.isArray(toEmails) ? toEmails : [toEmails];
             
@@ -170,8 +212,12 @@ class EmailService {
                 return false;
             }
 
+            // 获取发送方邮箱
+            const config = await configManager.getConfig();
+            const fromEmail = config.smtpConfig ? config.smtpConfig.from : (process.env.FROM_EMAIL || process.env.SMTP_USER);
+
             const mailOptions = {
-                from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                from: fromEmail,
                 to: validEmails.join(','), // 多个邮箱用逗号分隔
                 subject: 'SSL证书监控系统 - 测试邮件',
                 html: `

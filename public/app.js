@@ -598,6 +598,7 @@ function loadEmailConfigs() {
     if (!emailConfigList || !currentData) return;
     
     const emailSettings = currentData.config.emailSettings;
+    const smtpConfig = currentData.config.smtpConfig;
     const emails = emailSettings.toEmails || [];
     
     let html = `
@@ -612,6 +613,21 @@ function loadEmailConfigs() {
                         <strong>预警天数:</strong> ${emailSettings.warningDays || 30} 天
                     </div>
                 </div>
+                ${smtpConfig ? `
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <strong>SMTP服务器配置:</strong>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                服务器: ${smtpConfig.host}:${smtpConfig.port} | 
+                                用户: ${smtpConfig.user} | 
+                                发送方: ${smtpConfig.from} | 
+                                安全连接: ${smtpConfig.secure ? '是' : '否'}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
                 ${emails.length > 0 ? `
                 <div class="mt-3">
                     <h6>邮箱列表:</h6>
@@ -632,6 +648,16 @@ function loadEmailConfigs() {
     `;
     
     emailConfigList.innerHTML = html;
+    
+    // 加载SMTP配置到表单
+    if (smtpConfig) {
+        document.getElementById('smtp-host').value = smtpConfig.host || '';
+        document.getElementById('smtp-port').value = smtpConfig.port || '';
+        document.getElementById('smtp-user').value = smtpConfig.user || '';
+        document.getElementById('smtp-pass').value = smtpConfig.pass || '';
+        document.getElementById('smtp-from').value = smtpConfig.from || '';
+        document.getElementById('smtp-secure').value = smtpConfig.secure ? 'true' : 'false';
+    }
 }
 
 function showAddEmailModal() {

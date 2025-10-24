@@ -114,10 +114,22 @@ class ConfigManager {
                 };
             }
             
+            // 加载SMTP配置
+            const smtpConfigData = await database.getConfig('smtpConfig');
+            let smtpConfig = null;
+            if (smtpConfigData) {
+                try {
+                    smtpConfig = JSON.parse(smtpConfigData);
+                } catch (error) {
+                    console.log('解析smtpConfig失败:', error.message);
+                }
+            }
+            
             this.config = {
                 domains: domains,
                 emailSettings: emailSettings,
                 scheduleSettings: scheduleSettings,
+                smtpConfig: smtpConfig,
                 lastCheckTime: await database.getConfig('lastCheckTime'),
                 lastEmailSent: await database.getConfig('lastEmailSent')
             };
@@ -141,6 +153,11 @@ class ConfigManager {
             // 只保存到数据库
             await database.setConfig('emailSettings', JSON.stringify(config.emailSettings));
             await database.setConfig('scheduleSettings', JSON.stringify(config.scheduleSettings));
+            
+            // 保存SMTP配置
+            if (config.smtpConfig) {
+                await database.setConfig('smtpConfig', JSON.stringify(config.smtpConfig));
+            }
             
             // 保存其他配置字段（如果存在且不为null）
             if (config.lastCheckTime !== null && config.lastCheckTime !== undefined && config.lastCheckTime !== '') {
@@ -427,6 +444,10 @@ class ConfigManager {
             
             if (newConfig.scheduleSettings !== undefined) {
                 updatedConfig.scheduleSettings = { ...currentConfig.scheduleSettings, ...newConfig.scheduleSettings };
+            }
+            
+            if (newConfig.smtpConfig !== undefined) {
+                updatedConfig.smtpConfig = newConfig.smtpConfig;
             }
             
             await this.saveConfig(updatedConfig);
