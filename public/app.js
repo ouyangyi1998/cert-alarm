@@ -35,11 +35,13 @@ async function loadSystemStatus() {
             console.log('当前数据:', currentData);
             
             updateSystemStatus(result.data);
-            updateOverviewCards(result.data);
             // 数据加载完成后，更新配置显示
             loadDomainsTable();
             loadEmailConfigs();
             loadScheduleConfigs();
+            
+            // 更新概览卡片（在设置currentData之后）
+            updateOverviewCards(result.data);
             
             // 如果有检查结果，更新概况页面
             if (currentData.checkResults && currentData.checkResults.results) {
@@ -89,23 +91,49 @@ function updateSystemStatus(data) {
 
 // 更新概览卡片
 function updateOverviewCards(data) {
+    console.log('更新概览卡片，数据:', data);
+    
     const config = data.config;
     const domains = config.domains || [];
     
     // 更新监控域名数量
-    document.getElementById('total-domains').textContent = domains.length;
+    const totalDomainsElement = document.getElementById('total-domains');
+    if (totalDomainsElement) {
+        totalDomainsElement.textContent = domains.length;
+        console.log('更新监控域名数量:', domains.length);
+    }
     
     // 如果有检查结果，更新其他卡片
-    if (currentData && currentData.checkResults) {
-        const results = currentData.checkResults;
-        document.getElementById('healthy-certs').textContent = results.healthy || 0;
-        document.getElementById('expiring-certs').textContent = results.expiring || 0;
-        document.getElementById('failed-certs').textContent = results.failed || 0;
+    if (data.checkResults) {
+        const results = data.checkResults;
+        console.log('检查结果:', results);
+        
+        const healthyElement = document.getElementById('healthy-certs');
+        const expiringElement = document.getElementById('expiring-certs');
+        const failedElement = document.getElementById('failed-certs');
+        
+        if (healthyElement) {
+            healthyElement.textContent = results.healthy || 0;
+            console.log('更新正常证书数量:', results.healthy || 0);
+        }
+        if (expiringElement) {
+            expiringElement.textContent = results.expiring || 0;
+            console.log('更新即将到期数量:', results.expiring || 0);
+        }
+        if (failedElement) {
+            failedElement.textContent = results.failed || 0;
+            console.log('更新检查失败数量:', results.failed || 0);
+        }
     } else {
+        console.log('没有检查结果数据，显示默认值');
         // 默认显示0
-        document.getElementById('healthy-certs').textContent = '0';
-        document.getElementById('expiring-certs').textContent = '0';
-        document.getElementById('failed-certs').textContent = '0';
+        const healthyElement = document.getElementById('healthy-certs');
+        const expiringElement = document.getElementById('expiring-certs');
+        const failedElement = document.getElementById('failed-certs');
+        
+        if (healthyElement) healthyElement.textContent = '0';
+        if (expiringElement) expiringElement.textContent = '0';
+        if (failedElement) failedElement.textContent = '0';
     }
 }
 
