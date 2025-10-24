@@ -656,7 +656,10 @@ function loadEmailConfigs() {
         document.getElementById('smtp-user').value = smtpConfig.user || '';
         document.getElementById('smtp-pass').value = smtpConfig.pass || '';
         document.getElementById('smtp-from').value = smtpConfig.from || '';
-        document.getElementById('smtp-secure').value = smtpConfig.secure ? 'true' : 'false';
+        // 根据端口号自动设置安全连接
+        const port = smtpConfig.port || 587;
+        const shouldBeSecure = port === 465 || (smtpConfig.secure === true);
+        document.getElementById('smtp-secure').value = shouldBeSecure ? 'true' : 'false';
     }
 }
 
@@ -1613,7 +1616,8 @@ async function saveSmtpConfig() {
         
         if (result.success) {
             showSuccess('SMTP配置保存成功');
-            loadEmailConfigs(); // 重新加载配置
+            // 重新加载系统状态以获取最新的SMTP配置
+            loadSystemStatus();
         } else {
             showError('保存SMTP配置失败: ' + result.message);
         }

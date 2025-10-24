@@ -19,10 +19,12 @@ class EmailService {
             const config = await configManager.getConfig();
             if (config.smtpConfig) {
                 const smtpConfig = config.smtpConfig;
+                // 根据端口号自动设置安全连接
+                const isSecure = smtpConfig.port === 465 || smtpConfig.secure === true;
                 const transporterOptions = {
                     host: smtpConfig.host,
                     port: smtpConfig.port,
-                    secure: smtpConfig.secure,
+                    secure: isSecure,
                     auth: {
                         user: smtpConfig.user,
                         pass: smtpConfig.pass
@@ -32,7 +34,7 @@ class EmailService {
                     }
                 };
                 
-                this.transporter = nodemailer.createTransporter(transporterOptions);
+                this.transporter = nodemailer.createTransport(transporterOptions);
                 console.log('已使用数据库中的SMTP配置重新初始化邮件传输器');
                 return true;
             } else {
