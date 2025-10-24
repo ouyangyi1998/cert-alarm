@@ -106,7 +106,7 @@ cert-alarm/
 ├── public/                # 前端静态文件
 │   ├── index.html         # 主页面
 │   ├── app.js            # 前端JavaScript
-│   └── styles.css        # 样式文件
+│   └── styles.css          # 样式文件
 ├── data/                 # 数据库文件目录
 ├── app.js               # 应用入口文件
 ├── package.json         # 项目配置
