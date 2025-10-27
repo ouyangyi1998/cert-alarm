@@ -50,12 +50,12 @@ async function loadSystemStatus() {
             
             try {
                 console.log('准备调用updateSystemStatus，数据:', result.data);
-                updateSystemStatus(result.data);
-                // 数据加载完成后，更新配置显示
+            updateSystemStatus(result.data);
+            // 数据加载完成后，更新配置显示
                 console.log('开始更新界面组件...');
-                loadDomainsTable();
-                loadEmailConfigs();
-                loadScheduleConfigs();
+            loadDomainsTable();
+            loadEmailConfigs();
+            loadScheduleConfigs();
                 console.log('界面组件更新完成');
             } catch (error) {
                 console.error('更新界面失败:', error);
@@ -145,7 +145,7 @@ function updateSystemStatus(data) {
         statusHtml += `<br><strong>最后检查:</strong> ${scheduler.lastCheckTime}`;
     }
     
-        statusElement.innerHTML = statusHtml;
+    statusElement.innerHTML = statusHtml;
     } catch (error) {
         console.error('更新系统状态失败:', error);
         statusElement.innerHTML = '<p class="text-danger">系统状态更新失败</p>';
@@ -779,6 +779,12 @@ function loadEmailConfigs() {
         const port = smtpConfig.port || 587;
         const shouldBeSecure = port === 465 || (smtpConfig.secure === true);
         document.getElementById('smtp-secure').value = shouldBeSecure ? 'true' : 'false';
+    }
+
+    // 同步全局预警天数到表单输入框
+    const warningInput = document.getElementById('warning-days');
+    if (warningInput) {
+        warningInput.value = emailSettings.warningDays || 30;
     }
 }
 
@@ -1445,11 +1451,6 @@ function loadDetailedResults() {
                                     <tr><td><strong>检查消息:</strong></td><td><small class="text-muted">${result.message || '-'}</small></td></tr>
                                 </table>
                             </div>
-                        </div>
-                        <div class="mt-3">
-                            <button class="btn btn-sm btn-outline-primary" onclick="checkSingleDomainFromDetails('${result.domain}')">
-                                <i class="bi bi-arrow-clockwise"></i> 重新检查
-                            </button>
                         </div>
                     </div>
                 </div>

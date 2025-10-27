@@ -158,13 +158,13 @@
                                 <button class="btn btn-primary me-2" onclick="manualCheck()">
                                     <i class="bi bi-arrow-clockwise"></i> 手动检查
                                 </button>
-                            </div>
+                                </div>
                             <div>
                                 <button class="btn btn-outline-info btn-sm" onclick="showDetailedResults()">
-                                    <i class="bi bi-list-ul"></i> 查看详细信息
-                                </button>
+                                        <i class="bi bi-list-ul"></i> 查看详细信息
+                                    </button>
+                                </div>
                             </div>
-                        </div>
                     </div>
                 </div>
 
@@ -176,7 +176,7 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div id="system-status">
+                                <div id="system-status">
                             <div class="text-center">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="visually-hidden">加载中...</span>
@@ -197,9 +197,9 @@
                             <button class="btn btn-outline-secondary btn-sm me-2" onclick="refreshDomainsTable()">
                                 <i class="bi bi-arrow-clockwise"></i> 刷新
                             </button>
-                            <button class="btn btn-primary btn-sm" onclick="showAddDomainModal()">
-                                <i class="bi bi-plus"></i> 添加域名
-                            </button>
+                        <button class="btn btn-primary btn-sm" onclick="showAddDomainModal()">
+                            <i class="bi bi-plus"></i> 添加域名
+                        </button>
                         </div>
                     </div>
                     <div class="card-body">
@@ -231,9 +231,6 @@
                 <div class="card mt-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">邮件设置</h5>
-                        <button class="btn btn-primary btn-sm" onclick="showAddEmailModal()">
-                            <i class="bi bi-plus"></i> 添加邮件配置
-                        </button>
                     </div>
                     <div class="card-body">
                         <!-- 当前邮件配置列表 -->
@@ -310,14 +307,23 @@
                         
                         <!-- 邮件设置表单 -->
                         <form id="email-form">
+                            <!-- 全局预警天数：单独一行并带保存按钮 -->
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="warning-days" class="form-label">预警天数</label>
-                                        <input type="number" class="form-control" id="warning-days" min="1" max="365" value="30">
+                                        <label for="warning-days" class="form-label">全局预警天数</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="warning-days" min="1" max="365" value="30">
+                                            <button type="button" class="btn btn-primary" onclick="updateEmailConfig()">
+                                                <i class="bi bi-save"></i> 保存
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                            </div>
+                            <!-- 添加新邮箱：独立一行 -->
+                            <div class="row">
+                                <div class="col-md-8">
                                     <div class="mb-3">
                                         <label for="new-email-input" class="form-label">添加新邮箱</label>
                                         <div class="input-group">
@@ -453,39 +459,7 @@
         </div>
     </div>
 
-    <!-- 添加邮件配置模态框 -->
-    <div class="modal fade" id="addEmailModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">添加邮件配置</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="add-email-form" onsubmit="handleAddEmailForm(event)">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="new-email" class="form-label">接收邮箱</label>
-                                    <input type="email" class="form-control" id="new-email" placeholder="user@example.com" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="new-warning-days" class="form-label">预警天数</label>
-                                    <input type="number" class="form-control" id="new-warning-days" min="1" max="365" value="30" required>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="addEmailConfig()">添加</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    
 
     <!-- 详细检查结果模态框 -->
     <div class="modal fade" id="detailedResultsModal" tabindex="-1">

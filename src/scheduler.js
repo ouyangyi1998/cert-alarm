@@ -13,6 +13,8 @@ class Scheduler {
         this.currentTask = null;
         this.isRunning = false;
         this.lastCheckResults = null;
+        // 独立的日报定时任务
+        this.dailyTask = null;
     }
 
     /**
@@ -58,10 +60,13 @@ class Scheduler {
             this.currentTask = cron.schedule(
                 scheduleSettings.cronExpression,
                 async () => {
-                    // 先执行证书检查
+                    // 只执行证书检查
                     await this.executeCertificateCheck();
-                    // 然后执行日报任务
-                    await this.executeDailyReport();
+                    
+                    // 兼容保留：如果未启用独立日报任务，仍在此处检查一次
+                    if (!this.dailyTask) {
+                        await this.checkAndSendDailyReport();
+                    }
                 },
                 {
                     scheduled: true,
@@ -71,6 +76,46 @@ class Scheduler {
 
             console.log(`定时任务已启动，执行时间: ${scheduleSettings.cronExpression}`);
             console.log(`时区设置: ${scheduleSettings.timezone || 'Asia/Shanghai'}`);
+
+            // 启动独立的日报任务（如果已启用）
+            try {
+                const config = await configManager.getConfig();
+                const dailyReportSettings = config.dailyReportSettings;
+                if (dailyReportSettings && dailyReportSettings.enabled && dailyReportSettings.time) {
+                    const [hour, minute] = dailyReportSettings.time.split(':');
+                    const dailyCron = `${minute} ${hour} * * *`;
+                    if (cron.validate(dailyCron)) {
+                        // 防止重复创建
+                        if (this.dailyTask) {
+                            this.dailyTask.destroy();
+                            this.dailyTask = null;
+                        }
+                        this.dailyTask = cron.schedule(
+                            dailyCron,
+                            async () => {
+                                await this.checkAndSendDailyReport();
+                            },
+                            {
+                                scheduled: true,
+                                timezone: dailyReportSettings.timezone || 'Asia/Shanghai'
+                            }
+                        );
+                        console.log(`日报任务已启动，执行时间: ${dailyCron}`);
+                        console.log(`日报时区: ${dailyReportSettings.timezone || 'Asia/Shanghai'}`);
+                    } else {
+                        console.error('无效的日报时间，无法创建日报任务:', dailyReportSettings.time);
+                    }
+                } else {
+                    // 未启用日报则不创建 dailyTask
+                    if (this.dailyTask) {
+                        this.dailyTask.destroy();
+                        this.dailyTask = null;
+                    }
+                    console.log('日报功能未启用，未创建独立日报任务');
+                }
+            } catch (e) {
+                console.error('创建日报任务失败:', e);
+            }
 
         } catch (error) {
             console.error('启动定时任务失败:', error);
@@ -87,6 +132,13 @@ class Scheduler {
             }
             this.currentTask = null;
             console.log('定时任务已停止');
+        }
+        if (this.dailyTask) {
+            if (typeof this.dailyTask.destroy === 'function') {
+                this.dailyTask.destroy();
+            }
+            this.dailyTask = null;
+            console.log('日报任务已停止');
         }
     }
 
@@ -155,7 +207,7 @@ class Scheduler {
                 );
 
                 if (emailSent) {
-                    await configManager.updateLastEmailSent(moment().format('YYYY-MM-DD HH:mm:ss'));
+                    await configManager.updateLastAlertEmailSent(moment().format('YYYY-MM-DD HH:mm:ss'));
                     console.log('证书到期提醒邮件发送成功');
                 } else {
                     console.log('证书到期提醒邮件发送失败');
@@ -169,6 +221,23 @@ class Scheduler {
 
             // 记录详细结果
             this.logCheckResults(results, expiringCerts, failedCerts);
+
+            // 缓存检查结果，供同一时间窗口的日报复用
+            try {
+                const checkResults = {
+                    total: results.length,
+                    healthy: healthyCerts.length,
+                    expiring: expiringCerts.length,
+                    failed: failedCerts.length,
+                    results: results,
+                    expiringCerts: expiringCerts,
+                    failedCerts: failedCerts,
+                    lastCheckTime: new Date().toLocaleString()
+                };
+                this.lastCheckResults = checkResults;
+            } catch (cacheError) {
+                console.log('缓存检查结果失败（不影响主流程）:', cacheError.message);
+            }
 
         } catch (error) {
             console.error('执行证书检查任务时发生错误:', error);
@@ -281,7 +350,9 @@ class Scheduler {
             cronExpression: scheduleSettings.cronExpression,
             timezone: scheduleSettings.timezone || 'Asia/Shanghai',
             lastCheckTime: await configManager.getLastCheckTime(),
-            lastEmailSent: await configManager.getLastEmailSent()
+            lastEmailSent: await configManager.getLastEmailSent(), // 兼容旧字段
+            lastAlertEmailSent: await configManager.getLastAlertEmailSent(),
+            lastDailyReportSent: await configManager.getLastDailyReportSent()
         };
     }
 
@@ -299,6 +370,53 @@ class Scheduler {
         } catch (error) {
             console.error('获取最后检查结果失败:', error);
             return null;
+        }
+    }
+
+    /**
+     * 检查并发送日报
+     */
+    async checkAndSendDailyReport() {
+        try {
+            const config = await configManager.getConfig();
+            const dailyReportSettings = config.dailyReportSettings;
+            
+            // 检查日报是否启用
+            if (!dailyReportSettings || !dailyReportSettings.enabled) {
+                console.log('日报功能未启用，跳过日报检查');
+                return;
+            }
+            
+            // 检查是否有配置的邮箱
+            if (!config.emailSettings.toEmails || config.emailSettings.toEmails.length === 0) {
+                console.log('没有配置接收邮箱，跳过日报检查');
+                return;
+            }
+            
+            // 去重策略：
+            // 1) 默认每天只发一次
+            // 2) 如果当日已发，但日报设置在之后被修改（updatedAt 晚于上次发送），允许当日再次发送
+            const today = moment().format('YYYY-MM-DD');
+            const lastDaily = await configManager.getLastDailyReportSent();
+            if (lastDaily) {
+                const lastDate = moment(lastDaily).format('YYYY-MM-DD');
+                if (lastDate === today) {
+                    const settingsUpdatedAt = dailyReportSettings && dailyReportSettings.updatedAt
+                        ? moment(dailyReportSettings.updatedAt)
+                        : null;
+                    const lastSentAt = moment(lastDaily);
+                    if (!settingsUpdatedAt || !settingsUpdatedAt.isAfter(lastSentAt)) {
+                        console.log('今天已经发送过日报，且设置未变更，跳过发送');
+                        return;
+                    }
+                    console.log('今天已发过日报，但设置已更新，允许再次发送');
+                }
+            }
+            
+            console.log('开始发送日报...');
+            await this.executeDailyReport();
+        } catch (error) {
+            console.error('检查日报发送时间失败:', error);
         }
     }
 
@@ -324,7 +442,8 @@ class Scheduler {
         }
         
         try {
-            // 执行证书检查获取最新数据
+            // 每次发送日报前都执行一次最新检查
+            console.log('发送日报前执行最新证书检查...');
             const checkResults = await this.manualCheck();
             
             if (checkResults) {
@@ -333,10 +452,8 @@ class Scheduler {
                 await emailService.sendDailyReport(config.emailSettings.toEmails, checkResults);
                 console.log('日报邮件发送成功');
                 
-                // 更新最后发送时间
-                await configManager.updateConfig({
-                    lastEmailSent: new Date().toISOString()
-                });
+                // 更新日报最后发送时间
+                await configManager.updateLastDailyReportSent(new Date().toISOString());
             }
         } catch (error) {
             console.error('执行日报任务失败:', error);

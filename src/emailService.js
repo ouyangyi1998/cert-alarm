@@ -111,6 +111,8 @@ class EmailService {
      */
     async sendCertificateAlert(expiringCerts, toEmails, warningDays = 30) {
         try {
+            // 与日报一致：优先使用数据库中的SMTP配置
+            await this.reinitializeTransporter();
             const subject = `SSL证书到期提醒 - ${moment().format('YYYY-MM-DD')}`;
             
             let htmlContent = `
@@ -176,8 +178,12 @@ class EmailService {
                 return false;
             }
 
+            // 统一使用数据库中的 from 配置；若无则回退到环境变量
+            const config = await configManager.getConfig();
+            const fromEmail = config.smtpConfig ? config.smtpConfig.from : (process.env.FROM_EMAIL || process.env.SMTP_USER);
+
             const mailOptions = {
-                from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                from: fromEmail,
                 to: validEmails.join(','), // 多个邮箱用逗号分隔
                 subject: subject,
                 html: htmlContent
