@@ -17,44 +17,40 @@ router.get('/status', async (req, res) => {
         // 获取最新的检查结果
         let checkResults = null;
         try {
-            // 首先尝试从调度器获取缓存的检查结果
-            const lastCheck = await scheduler.getLastCheckResults();
-            if (lastCheck) {
-                checkResults = lastCheck;
+            // 优先使用数据库中的最新结果，确保新添加域名检查后刷新能看到
+            const dbResults = await database.getLatestCertChecks();
+            if (dbResults && dbResults.length > 0) {
+                const results = dbResults.map(row => ({
+                    domain: row.domain,
+                    status: row.status,
+                    issuer: row.issuer,
+                    subject: row.subject,
+                    validFrom: row.valid_from,
+                    validTo: row.valid_to,
+                    expiryDate: row.expiry_date,
+                    daysUntilExpiry: row.days_until_expiry,
+                    fingerprint: row.fingerprint,
+                    error: row.error_message,
+                    lastCheckTime: new Date(row.check_time).toLocaleString()
+                }));
+                const healthyCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry > 30);
+                const expiringCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry <= 30);
+                const failedCerts = results.filter(r => r.status === 'error');
+                checkResults = {
+                    total: results.length,
+                    healthy: healthyCerts.length,
+                    expiring: expiringCerts.length,
+                    failed: failedCerts.length,
+                    results: results,
+                    expiringCerts: expiringCerts,
+                    failedCerts: failedCerts,
+                    lastCheckTime: dbResults[0] ? new Date(dbResults[0].check_time).toLocaleString() : null
+                };
             } else {
-                // 如果缓存中没有，从数据库加载最新的检查结果
-                const dbResults = await database.getLatestCertChecks();
-                if (dbResults && dbResults.length > 0) {
-                    // 转换数据库格式为前端需要的格式
-                    const results = dbResults.map(row => ({
-                        domain: row.domain,
-                        status: row.status,
-                        issuer: row.issuer,
-                        subject: row.subject,
-                        validFrom: row.valid_from,
-                        validTo: row.valid_to,
-                        expiryDate: row.expiry_date,
-                        daysUntilExpiry: row.days_until_expiry,
-                        fingerprint: row.fingerprint,
-                        error: row.error_message,
-                        lastCheckTime: new Date(row.check_time).toLocaleString()
-                    }));
-                    
-                    // 分析结果
-                    const healthyCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry > 30);
-                    const expiringCerts = results.filter(r => r.status === 'success' && r.daysUntilExpiry <= 30);
-                    const failedCerts = results.filter(r => r.status === 'error');
-                    
-                    checkResults = {
-                        total: results.length,
-                        healthy: healthyCerts.length,
-                        expiring: expiringCerts.length,
-                        failed: failedCerts.length,
-                        results: results,
-                        expiringCerts: expiringCerts,
-                        failedCerts: failedCerts,
-                        lastCheckTime: dbResults[0] ? new Date(dbResults[0].check_time).toLocaleString() : null
-                    };
+                // 数据库暂无记录时再回退使用缓存
+                const lastCheck = await scheduler.getLastCheckResults();
+                if (lastCheck) {
+                    checkResults = lastCheck;
                 }
             }
         } catch (error) {
@@ -238,8 +234,8 @@ router.put('/config', async (req, res) => {
  * 获取证书详情
  */
 router.get('/certificate/:domain', async (req, res) => {
+    const { domain } = req.params; // 放在 try 外，供 catch 使用
     try {
-        const { domain } = req.params;
         const result = await certChecker.checkCertificate(domain);
         
         // 保存检查结果到数据库

@@ -24,7 +24,10 @@ class ConfigManager {
                 timezone: 'Asia/Shanghai'
             },
             lastCheckTime: null,
-            lastEmailSent: null
+            lastEmailSent: null,
+            // 新增：分别记录告警与日报的最近发送时间
+            lastAlertEmailSent: null,
+            lastDailyReportSent: null
         };
         this.config = null;
     }
@@ -147,9 +150,9 @@ class ConfigManager {
                         dailyReportSettings = JSON.parse(dailyReportSettingsData);
                     } else {
                         // 如果已经是对象，直接使用
-                        dailyReportSettings = dailyReportSettingsData;
+                dailyReportSettings = dailyReportSettingsData;
                     }
-                    console.log('使用数据库中的日报设置:', dailyReportSettings);
+                console.log('使用数据库中的日报设置:', dailyReportSettings);
                 } catch (parseError) {
                     console.log('解析日报设置失败，使用默认设置:', parseError.message);
                     dailyReportSettings = {
@@ -174,7 +177,9 @@ class ConfigManager {
                 smtpConfig: smtpConfig,
                 dailyReportSettings: dailyReportSettings,
                 lastCheckTime: await database.getConfig('lastCheckTime'),
-                lastEmailSent: await database.getConfig('lastEmailSent')
+                lastEmailSent: await database.getConfig('lastEmailSent'),
+                lastAlertEmailSent: await database.getConfig('lastAlertEmailSent'),
+                lastDailyReportSent: await database.getConfig('lastDailyReportSent')
             };
             
             console.log('配置加载完成:', this.config);
@@ -222,6 +227,12 @@ class ConfigManager {
             }
             if (config.lastEmailSent !== null && config.lastEmailSent !== undefined && config.lastEmailSent !== '') {
                 await database.setConfig('lastEmailSent', config.lastEmailSent);
+            }
+            if (config.lastAlertEmailSent !== null && config.lastAlertEmailSent !== undefined && config.lastAlertEmailSent !== '') {
+                await database.setConfig('lastAlertEmailSent', config.lastAlertEmailSent);
+            }
+            if (config.lastDailyReportSent !== null && config.lastDailyReportSent !== undefined && config.lastDailyReportSent !== '') {
+                await database.setConfig('lastDailyReportSent', config.lastDailyReportSent);
             }
             
             // 更新内存中的配置
@@ -438,6 +449,24 @@ class ConfigManager {
     }
 
     /**
+     * 更新最后日报发送时间
+     */
+    async updateLastDailyReportSent(timestamp) {
+        const config = await this.getConfig();
+        config.lastDailyReportSent = timestamp;
+        await this.saveConfig(config);
+    }
+
+    /**
+     * 更新最后到期告警发送时间
+     */
+    async updateLastAlertEmailSent(timestamp) {
+        const config = await this.getConfig();
+        config.lastAlertEmailSent = timestamp;
+        await this.saveConfig(config);
+    }
+
+    /**
      * 获取最后检查时间
      * @returns {string|null} 最后检查时间
      */
@@ -453,6 +482,22 @@ class ConfigManager {
     async getLastEmailSent() {
         const config = await this.getConfig();
         return config.lastEmailSent;
+    }
+
+    /**
+     * 获取最后日报发送时间
+     */
+    async getLastDailyReportSent() {
+        const config = await this.getConfig();
+        return config.lastDailyReportSent;
+    }
+
+    /**
+     * 获取最后到期告警发送时间
+     */
+    async getLastAlertEmailSent() {
+        const config = await this.getConfig();
+        return config.lastAlertEmailSent;
     }
 
     /**
@@ -510,7 +555,13 @@ class ConfigManager {
             
             if (newConfig.dailyReportSettings !== undefined) {
                 console.log('更新日报设置:', newConfig.dailyReportSettings);
-                updatedConfig.dailyReportSettings = newConfig.dailyReportSettings;
+                // 当日报设置变更时打上更新时间戳，供当日重发判断使用
+                const previous = currentConfig.dailyReportSettings || {};
+                updatedConfig.dailyReportSettings = { 
+                    ...previous, 
+                    ...newConfig.dailyReportSettings,
+                    updatedAt: new Date().toISOString()
+                };
             }
             
             await this.saveConfig(updatedConfig);
