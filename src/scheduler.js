@@ -4,6 +4,7 @@ const moment = require('moment');
 const certChecker = require('./certChecker');
 const emailService = require('./emailService');
 const configManager = require('./configManager');
+const database = require('./database');
 
 /**
  * 定时任务调度器类
@@ -398,6 +399,7 @@ class Scheduler {
             // 2) 如果当日已发，但日报设置在之后被修改（updatedAt 晚于上次发送），允许当日再次发送
             const today = moment().format('YYYY-MM-DD');
             const lastDaily = await configManager.getLastDailyReportSent();
+            let allowResendToday = false;
             if (lastDaily) {
                 const lastDate = moment(lastDaily).format('YYYY-MM-DD');
                 if (lastDate === today) {
@@ -410,7 +412,23 @@ class Scheduler {
                         return;
                     }
                     console.log('今天已发过日报，但设置已更新，允许再次发送');
+                    allowResendToday = true;
                 }
+            }
+
+            // 数据库幂等锁：同一天只允许一个实例发送
+            try {
+                if (allowResendToday) {
+                    // 当天允许重发：先释放之前的锁
+                    await database.releaseDailySendLock(today);
+                }
+                const acquired = await database.tryAcquireDailySendLock(today);
+                if (!acquired) {
+                    console.log('今日日报发送任务已由其它实例处理，跳过');
+                    return;
+                }
+            } catch (lockErr) {
+                console.log('获取日报发送锁失败（继续尝试发送以避免错过）:', lockErr.message);
             }
             
             console.log('开始发送日报...');
@@ -454,6 +472,13 @@ class Scheduler {
                 
                 // 更新日报最后发送时间
                 await configManager.updateLastDailyReportSent(new Date().toISOString());
+                // 标记数据库锁
+                try {
+                    const today = moment().format('YYYY-MM-DD');
+                    await database.markDailyReportSent(today, new Date().toISOString());
+                } catch (e) {
+                    console.log('更新日报发送标记失败（不影响主流程）:', e.message);
+                }
             }
         } catch (error) {
             console.error('执行日报任务失败:', error);

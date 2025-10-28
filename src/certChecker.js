@@ -8,6 +8,17 @@ const database = require('./database');
  */
 class CertChecker {
     /**
+     * 统一计算剩余天数（向上取整，最小0）
+     * @param {moment.Moment} expiryMoment
+     * @returns {number}
+     */
+    computeDaysUntilExpiry(expiryMoment) {
+        const nowMs = Date.now();
+        const diffMs = expiryMoment.valueOf() - nowMs;
+        const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+        return Math.max(0, days);
+    }
+    /**
      * 验证域名格式
      * @param {string} domain - 域名
      * @returns {boolean} 是否有效
@@ -148,7 +159,7 @@ class CertChecker {
         // 基于浏览器显示的证书信息
         const now = moment();
         const expiryDate = moment('2025-12-31 16:29:10', 'YYYY-MM-DD HH:mm:ss');
-        const daysUntilExpiry = expiryDate.diff(now, 'days');
+        const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
         
         return {
             domain: domain,
@@ -193,7 +204,7 @@ class CertChecker {
         }
         
         const expiryDate = moment(certInfo.validTo);
-        const daysUntilExpiry = expiryDate.diff(now, 'days');
+        const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
         
         return {
             domain: domain,
@@ -249,7 +260,7 @@ class CertChecker {
                             const cert = result.certificates[0];
                             const now = moment();
                             const expiryDate = moment(cert.not_after);
-                            const daysUntilExpiry = expiryDate.diff(now, 'days');
+                            const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
                             
                             resolve({
                                 domain: domain,
@@ -323,7 +334,7 @@ class CertChecker {
                 const expiryDate = moment(cert.valid_to, moment.ISO_8601).isValid() 
                     ? moment(cert.valid_to) 
                     : moment(new Date(cert.valid_to));
-                const daysUntilExpiry = expiryDate.diff(now, 'days');
+                const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
 
                 resolve({
                     domain: domain,
@@ -399,7 +410,7 @@ class CertChecker {
                     const expiryDate = moment(cert.valid_to, moment.ISO_8601).isValid() 
                         ? moment(cert.valid_to) 
                         : moment(new Date(cert.valid_to));
-                    const daysUntilExpiry = expiryDate.diff(now, 'days');
+                    const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
 
                     resolve({
                         domain: domain,

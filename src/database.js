@@ -90,6 +90,12 @@ class Database {
                     message TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
+
+                -- 日报发送幂等锁表（每天仅发送一次）
+                CREATE TABLE IF NOT EXISTS daily_report_log (
+                    date TEXT PRIMARY KEY,
+                    sent_at TEXT
+                );
             `;
 
             this.db.exec(createTablesSQL, (err) => {
@@ -287,6 +293,51 @@ class Database {
                 } else {
                     resolve(rows);
                 }
+            });
+        });
+    }
+
+    /**
+     * 试图获取当日日报发送锁（原子化）
+     * @param {string} dateYYYYMMDD - 日期字符串 YYYY-MM-DD
+     * @returns {Promise<boolean>} 是否获取成功
+     */
+    async tryAcquireDailySendLock(dateYYYYMMDD) {
+        return new Promise((resolve, reject) => {
+            if (!this.db) return reject(new Error('数据库未初始化'));
+            const sql = `INSERT OR IGNORE INTO daily_report_log(date, sent_at) VALUES(?, NULL)`;
+            this.db.run(sql, [dateYYYYMMDD], function(err) {
+                if (err) return reject(err);
+                // changes === 1 表示插入成功，拿到锁
+                resolve((this && this.changes) === 1);
+            });
+        });
+    }
+
+    /**
+     * 标记当日日报已发送
+     */
+    async markDailyReportSent(dateYYYYMMDD, sentAtISO) {
+        return new Promise((resolve, reject) => {
+            if (!this.db) return reject(new Error('数据库未初始化'));
+            const sql = `UPDATE daily_report_log SET sent_at = ? WHERE date = ?`;
+            this.db.run(sql, [sentAtISO, dateYYYYMMDD], function(err) {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * 释放当日锁（用于当日允许重发的场景）
+     */
+    async releaseDailySendLock(dateYYYYMMDD) {
+        return new Promise((resolve, reject) => {
+            if (!this.db) return reject(new Error('数据库未初始化'));
+            const sql = `DELETE FROM daily_report_log WHERE date = ?`;
+            this.db.run(sql, [dateYYYYMMDD], function(err) {
+                if (err) return reject(err);
+                resolve();
             });
         });
     }
