@@ -198,6 +198,9 @@ router.put('/config', async (req, res) => {
             }
         }
         
+        // 获取当前配置用于对比
+        const currentConfig = await configManager.getConfig();
+
         // 更新配置
         const updated = await configManager.updateConfig({
             domains,
@@ -208,8 +211,28 @@ router.put('/config', async (req, res) => {
         });
         
         if (updated) {
-            // 重新启动定时任务
-            await scheduler.startScheduledTask();
+            // 仅在时间相关设置发生变化时重建任务
+            let needRestart = false;
+            try {
+                if (scheduleSettings && scheduleSettings.cronExpression &&
+                    scheduleSettings.cronExpression !== (currentConfig.scheduleSettings && currentConfig.scheduleSettings.cronExpression)) {
+                    needRestart = true;
+                }
+                if (dailyReportSettings && (
+                    dailyReportSettings.time !== (currentConfig.dailyReportSettings && currentConfig.dailyReportSettings.time) ||
+                    dailyReportSettings.timezone !== (currentConfig.dailyReportSettings && currentConfig.dailyReportSettings.timezone) ||
+                    dailyReportSettings.enabled !== (currentConfig.dailyReportSettings && currentConfig.dailyReportSettings.enabled)
+                )) {
+                    needRestart = true; // 日报任务也需要重建
+                }
+            } catch (e) {
+                console.log('判断是否需要重启任务失败，默认重启一次:', e.message);
+                needRestart = true;
+            }
+
+            if (needRestart) {
+                await scheduler.startScheduledTask();
+            }
             
             res.json({
                 success: true,

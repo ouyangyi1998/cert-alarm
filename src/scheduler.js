@@ -407,12 +407,15 @@ class Scheduler {
                         ? moment(dailyReportSettings.updatedAt)
                         : null;
                     const lastSentAt = moment(lastDaily);
-                    if (!settingsUpdatedAt || !settingsUpdatedAt.isAfter(lastSentAt)) {
-                        console.log('今天已经发送过日报，且设置未变更，跳过发送');
+                    // 仅当显式允许同日重发，且设置更新时间晚于上次发送时才允许
+                    const allowSameDayResend = !!(dailyReportSettings && dailyReportSettings.allowSameDayResend);
+                    if (allowSameDayResend && settingsUpdatedAt && settingsUpdatedAt.isAfter(lastSentAt)) {
+                        console.log('今天已发过日报，但设置已更新且允许同日重发，允许再次发送');
+                        allowResendToday = true;
+                    } else {
+                        console.log('今天已发过日报，跳过发送');
                         return;
                     }
-                    console.log('今天已发过日报，但设置已更新，允许再次发送');
-                    allowResendToday = true;
                 }
             }
 

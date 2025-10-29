@@ -21,7 +21,8 @@ class ConfigManager {
             dailyReportSettings: {
                 enabled: false,
                 time: '08:00',
-                timezone: 'Asia/Shanghai'
+                timezone: 'Asia/Shanghai',
+                allowSameDayResend: false
             },
             lastCheckTime: null,
             lastEmailSent: null,
@@ -158,14 +159,16 @@ class ConfigManager {
                     dailyReportSettings = {
                         enabled: false,
                         time: '08:00',
-                        timezone: 'Asia/Shanghai'
+                        timezone: 'Asia/Shanghai',
+                        allowSameDayResend: false
                     };
                 }
             } else {
                 dailyReportSettings = {
                     enabled: false,
                     time: '08:00',
-                    timezone: 'Asia/Shanghai'
+                    timezone: 'Asia/Shanghai',
+                    allowSameDayResend: false
                 };
                 console.log('使用默认日报设置:', dailyReportSettings);
             }
@@ -509,7 +512,8 @@ class ConfigManager {
         return config.dailyReportSettings || {
             enabled: false,
             time: '08:00',
-            timezone: 'Asia/Shanghai'
+            timezone: 'Asia/Shanghai',
+            allowSameDayResend: false
         };
     }
 
