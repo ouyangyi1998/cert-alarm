@@ -1,6 +1,6 @@
 {
   "name": "cert-alarm",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "SSL证书到期监控和邮件提醒系统",
   "main": "app.js",
   "scripts": {
