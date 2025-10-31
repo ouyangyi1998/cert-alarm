@@ -54,19 +54,22 @@ class CertChecker {
             throw new Error('无效的域名格式');
         }
 
-        // 检测是否为特殊域名
-        const isSpecial = this.isSpecialDomain(domain);
-        if (isSpecial) {
-            console.log(`域名 ${domain} 是特殊域名，使用已知证书信息`);
-            return this.getSpecialDomainCertificateInfo(domain);
-        }
+        // 始终进行实时检查，不再对特殊域名进行硬编码短路
 
         // 检测是否为Cloudflare代理
         const isCloudflare = await this.detectCloudflareProxy(domain);
         console.log(`域名 ${domain} 是否为Cloudflare代理: ${isCloudflare}`);
         
-        // 简化TLS版本尝试，避免配置冲突
-        const tlsVersions = ['TLSv1_2_method', 'TLSv1_1_method', 'TLSv1_method'];
+        // 优先尝试通过 HTTP（HEAD）方式获取证书，利用 Node 的自动 TLS 协商（含 TLS1.3）
+        try {
+            const httpResult = await this.checkCertificateViaHTTP(domain);
+            return httpResult;
+        } catch (httpErr) {
+            console.log(`HTTP 方法检查失败，退回 TLS 直连: ${httpErr.message}`);
+        }
+        
+        // TLS 版本尝试（包含 TLSv1.3，向下回退）
+        const tlsVersions = ['TLSv1_3_method', 'TLSv1_2_method', 'TLSv1_1_method', 'TLSv1_method'];
         
         for (const tlsVersion of tlsVersions) {
             try {
@@ -80,8 +83,16 @@ class CertChecker {
                         console.log(`Cloudflare域名 ${domain} 无法直接检查，使用已知证书信息`);
                         return this.getCloudflareCertificateInfo(domain);
                     }
-                    // 所有方法都失败，抛出最后一个错误
-                    throw error;
+                    // 非 Cloudflare：尝试第三方 API 获取证书信息
+                    try {
+                        console.log(`TLS 直连失败，尝试第三方 API 获取 ${domain} 证书信息`);
+                        const thirdParty = await this.checkCertificateViaThirdParty(domain);
+                        return thirdParty;
+                    } catch (tpErr) {
+                        console.log(`第三方 API 也失败: ${tpErr.message}`);
+                        // 所有方法都失败，抛出最后一个错误
+                        throw error;
+                    }
                 }
             }
         }
@@ -103,18 +114,7 @@ class CertChecker {
         return cloudflareDomains.some(cfDomain => domain.includes(cfDomain));
     }
 
-    /**
-     * 检查是否为特殊域名（需要特殊处理）
-     * @param {string} domain - 域名
-     * @returns {boolean} 是否为特殊域名
-     */
-    isSpecialDomain(domain) {
-        const specialDomains = [
-            'cntrm.ananinja.net'
-        ];
-        
-        return specialDomains.includes(domain);
-    }
+    
 
     /**
      * 检测Cloudflare代理（通过DNS查询）
@@ -179,50 +179,7 @@ class CertChecker {
         };
     }
 
-    /**
-     * 获取特殊域名的已知证书信息
-     * @param {string} domain - 域名
-     * @returns {Object} 证书信息
-     */
-    getSpecialDomainCertificateInfo(domain) {
-        const now = moment();
-        
-        // 为特殊域名提供已知的证书信息
-        const specialCerts = {
-            'cntrm.ananinja.net': {
-                issuer: 'E7',
-                subject: 'cntrm.ananinja.net',
-                validFrom: '2024-11-30 10:01:38',
-                validTo: '2025-11-30 10:01:38',
-                fingerprint: 'E7-Certificate'
-            }
-        };
-        
-        const certInfo = specialCerts[domain];
-        if (!certInfo) {
-            throw new Error(`未找到域名 ${domain} 的特殊证书信息`);
-        }
-        
-        const expiryDate = moment(certInfo.validTo);
-        const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
-        
-        return {
-            domain: domain,
-            status: 'success',
-            issuer: certInfo.issuer,
-            subject: certInfo.subject,
-            validFrom: certInfo.validFrom,
-            validTo: certInfo.validTo,
-            expiryDate: expiryDate.format('YYYY-MM-DD HH:mm:ss'),
-            daysUntilExpiry: daysUntilExpiry,
-            isValid: daysUntilExpiry > 0,
-            isExpiring: daysUntilExpiry <= 30,
-            fingerprint: certInfo.fingerprint,
-            lastCheckTime: now.format('YYYY-MM-DD HH:mm:ss'),
-            method: 'Special-Known',
-            message: '此域名使用特殊证书，信息来自已知配置。'
-        };
-    }
+    
 
     /**
      * 通过第三方API检查证书（适用于Cloudflare等特殊代理）
@@ -230,74 +187,119 @@ class CertChecker {
      * @returns {Promise<Object>} 证书信息
      */
     async checkCertificateViaThirdParty(domain) {
-        return new Promise((resolve, reject) => {
-            const https = require('https');
-            
-            // 使用更简单的证书检查API
-            const options = {
-                hostname: 'api.certspotter.com',
-                port: 443,
-                path: `/v1/certificates?domain=${domain}&include_subdomains=true&expand=dns_names`,
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'SSL-Cert-Checker/1.0'
-                },
-                timeout: 15000
-            };
-
+        const https = require('https');
+        const fetchJson = (options) => new Promise((resolve, reject) => {
             const req = https.request(options, (res) => {
                 let data = '';
-                
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                
+                res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {
                     try {
-                        const result = JSON.parse(data);
-                        
-                        if (result.certificates && result.certificates.length > 0) {
-                            const cert = result.certificates[0];
-                            const now = moment();
-                            const expiryDate = moment(cert.not_after);
-                            const daysUntilExpiry = this.computeDaysUntilExpiry(expiryDate);
-                            
-                            resolve({
-                                domain: domain,
-                                status: 'success',
-                                issuer: cert.issuer?.name || 'Unknown',
-                                subject: cert.dns_names?.[0] || domain,
-                                validFrom: cert.not_before || 'Unknown',
-                                validTo: cert.not_after || 'Unknown',
-                                expiryDate: expiryDate.format('YYYY-MM-DD HH:mm:ss'),
-                                daysUntilExpiry: daysUntilExpiry,
-                                isValid: daysUntilExpiry > 0,
-                                isExpiring: daysUntilExpiry <= 30,
-                                fingerprint: cert.sha256 || 'Unknown',
-                                lastCheckTime: now.format('YYYY-MM-DD HH:mm:ss'),
-                                method: 'ThirdParty-API'
-                            });
-                        } else {
-                            reject(new Error('无法从第三方API获取证书信息'));
-                        }
-                    } catch (parseError) {
-                        reject(new Error(`解析第三方API响应失败: ${parseError.message}`));
+                        const json = JSON.parse(data);
+                        resolve(json);
+                    } catch (e) {
+                        reject(new Error(`解析JSON失败: ${e.message}`));
                     }
                 });
             });
-
-            req.on('error', (error) => {
-                reject(new Error(`第三方API请求失败: ${error.message}`));
-            });
-
-            req.on('timeout', () => {
-                req.destroy();
-                reject(new Error('第三方API请求超时'));
-            });
-
+            req.on('error', (err) => reject(err));
+            req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')); });
             req.setTimeout(15000);
             req.end();
         });
+
+        // 1) Cert Spotter v1 issuances
+        const tryCertSpotter = async () => {
+            const options = {
+                hostname: 'api.certspotter.com',
+                port: 443,
+                path: `/v1/issuances?domain=${encodeURIComponent(domain)}&include_subdomains=false&match_wildcards=false&expand=dns_names,issuer&limit=50`,
+                method: 'GET',
+                headers: { 'User-Agent': 'SSL-Cert-Checker/1.0' },
+                timeout: 15000
+            };
+            const arr = await fetchJson(options);
+            if (!Array.isArray(arr) || arr.length === 0) throw new Error('CertSpotter无结果');
+            const filtered = arr.filter(item => Array.isArray(item.dns_names) && item.dns_names.includes(domain));
+            const sorted = (filtered.length ? filtered : arr).sort((a, b) => new Date(b.not_after) - new Date(a.not_after));
+            const latest = sorted[0];
+            if (!latest || !latest.not_after) throw new Error('CertSpotter缺少not_after');
+
+            const validFrom = latest.not_before || latest.not_before_date || latest.not_before_time || latest.not_before_timestamp || latest.not_before_dt || latest.not_before_at || latest.not_before_str || latest.not_before_iso || latest.not_before_utc || latest.not_before_gmt || latest.not_before_rfc || latest.not_before;
+            const validTo = latest.not_after;
+            const expiryMoment = moment(validTo);
+            const daysUntilExpiry = this.computeDaysUntilExpiry(expiryMoment);
+            return {
+                domain: domain,
+                status: 'success',
+                issuer: (latest.issuer && (latest.issuer.name || latest.issuer.common_name)) || 'Unknown',
+                subject: domain,
+                validFrom: validFrom || 'Unknown',
+                validTo: validTo,
+                expiryDate: expiryMoment.format('YYYY-MM-DD HH:mm:ss'),
+                daysUntilExpiry: daysUntilExpiry,
+                isValid: daysUntilExpiry > 0,
+                isExpiring: daysUntilExpiry <= 30,
+                fingerprint: latest.sha256 || latest.fingerprint_sha256 || null,
+                lastCheckTime: moment().format('YYYY-MM-DD HH:mm:ss'),
+                method: 'CT-Logs'
+            };
+        };
+
+        // 2) crt.sh JSON
+        const tryCrtSh = async () => {
+            const options = {
+                hostname: 'crt.sh',
+                port: 443,
+                path: `/?q=${encodeURIComponent(domain)}&output=json`,
+                method: 'GET',
+                headers: { 'User-Agent': 'SSL-Cert-Checker/1.0' },
+                timeout: 15000
+            };
+            const arr = await fetchJson(options);
+            if (!Array.isArray(arr) || arr.length === 0) throw new Error('crt.sh无结果');
+            // 过滤匹配域名（name_value 可能包含多行）
+            const matches = arr.filter(item => {
+                const nameVal = typeof item.name_value === 'string' ? item.name_value : '';
+                const names = nameVal.split(/\n|,/).map(s => s.trim());
+                return names.includes(domain);
+            });
+            const candidates = matches.length ? matches : arr;
+            const parseDate = (s) => {
+                if (!s) return null;
+                const m = moment(s, [moment.ISO_8601, 'MMM D HH:mm:ss YYYY z', 'MMM  D HH:mm:ss YYYY z', 'YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DDTHH:mm:ss[Z]'], true);
+                return m.isValid() ? m : moment(new Date(s));
+            };
+            const getNotAfter = (obj) => obj.not_after || obj.notafter;
+            const getNotBefore = (obj) => obj.not_before || obj.notbefore;
+            const sorted = candidates.sort((a, b) => parseDate(getNotAfter(b)) - parseDate(getNotAfter(a)));
+            const latest = sorted[0];
+            if (!latest || !getNotAfter(latest)) throw new Error('crt.sh缺少not_after');
+            const validFrom = getNotBefore(latest);
+            const validTo = getNotAfter(latest);
+            const expiryMoment = parseDate(validTo);
+            const daysUntilExpiry = this.computeDaysUntilExpiry(expiryMoment);
+            return {
+                domain: domain,
+                status: 'success',
+                issuer: latest.issuer_name || 'Unknown',
+                subject: domain,
+                validFrom: validFrom || 'Unknown',
+                validTo: validTo,
+                expiryDate: expiryMoment.format('YYYY-MM-DD HH:mm:ss'),
+                daysUntilExpiry: daysUntilExpiry,
+                isValid: daysUntilExpiry > 0,
+                isExpiring: daysUntilExpiry <= 30,
+                fingerprint: latest.sha256 || latest.fingerprint_sha256 || null,
+                lastCheckTime: moment().format('YYYY-MM-DD HH:mm:ss'),
+                method: 'CT-Logs'
+            };
+        };
+
+        // 顺序尝试：先 Cert Spotter，失败再 crt.sh
+        try {
+            return await tryCertSpotter();
+        } catch (_) {}
+        return await tryCrtSh();
     }
 
     /**
